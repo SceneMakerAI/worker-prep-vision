@@ -1,0 +1,33 @@
+[Unit]
+Description=prep-vision — SceneMaker 영상 전처리(scenedetect 분할+프레임 추출) HTTP Service
+After=network-online.target nvme-prep.service
+Wants=network-online.target
+Requires=nvme-prep.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/service/source/scenemaker/worker/worker-prep-vision
+
+Environment="PATH=/usr/service/source/scenemaker/worker/worker-prep-vision/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=src"
+Environment="HOME=/root"
+
+ExecStartPre=/bin/bash -c "mountpoint -q /mnt/nvme || (echo NVMe-not-mounted && exit 1)"
+ExecStart=/usr/service/source/scenemaker/worker/worker-prep-vision/.venv/bin/python src/run.py
+
+# root 서빙 반경 축소 — 외부 입력(미디어 파일) 파싱 프로세스이므로 쓰기 가능 경로를 명시 범위로 제한
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/mnt/nvme/vod /usr/service/logs/scenemaker
+
+TimeoutStartSec=60
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+LimitNOFILE=32768
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+# ── 가상환경 (머신마다 다름, uv sync 로 재현) ──
+.venv/
+
+# ── 시크릿: DB 접속정보 등 (config.py 가 읽음 — 절대 커밋 금지) ──
+.env
+.env.*
+!.env.example
+
+# ── Claude Code 로컬 설정 (개인 권한 승인 기록 — 커밋 금지) ──
+.claude/settings.local.json
+
+# ── Python 바이트코드·캐시 ──
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── 테스트·도구 캐시 ──
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ── 빌드 산출물 ──
+build/
+dist/
+*.egg-info/
+
+# ── 에디터·OS ──
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# ── 로컬 산출물 ──
+logs/

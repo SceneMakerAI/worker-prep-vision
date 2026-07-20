@@ -1,0 +1,35 @@
+[project]
+name = "worker-prep-vision"
+version = "0.1.0"
+description = "SceneMaker Worker Prep Vision — 원본 영상 scenedetect 분할 + 프레임 사전추출 + t_segment 사전등록"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "asyncmy>=0.2.11",
+    "scenedetect>=0.6.4",
+    "opencv-python-headless>=4.10",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+# [build-system] 의도적 생략 — src/ 가 import 루트(PYTHONPATH=src)인 비패키지 앱.
+# uv 는 프로젝트를 빌드/설치하지 않고 의존성만 .venv 에 관리한다(형제 agent-vision 계승).
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
