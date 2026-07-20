@@ -50,7 +50,6 @@ async def run_prep(
         settings.prep_threshold,
         settings.prep_min_sec,
         settings.prep_max_sec,
-        settings.prep_min_scene_frames,
         settings.prep_frame_skip
     )
     

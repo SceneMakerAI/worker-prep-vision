@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     prep_threshold: float = 18.0        # 낮을수록 컷 촘촘
     prep_min_sec: float = 1.0           # 세그 최소 길이 — 미만이면 이웃과 병합
     prep_max_sec: float = 30.0          # 세그 최대 길이 — 초과하면 균등분할
-    prep_min_scene_frames: int = 15     # 컷 간 최소 프레임 간격
     prep_frame_skip: int = 0            # 분할 시 N프레임 건너뛰고 1장 검사(0=전 프레임).
                                         # 속도 ×(N+1), 컷 정밀도 하락 트레이드오프 — 기본 0 권장
 

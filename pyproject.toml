@@ -1,6 +1,6 @@
 [project]
 name = "worker-prep-vision"
-version = "0.1.2"
+version = "0.1.3"
 description = "SceneMaker Worker Prep Vision — 원본 영상 scenedetect 분할 + 프레임 사전추출 + t_segment 사전등록"
 requires-python = ">=3.12,<3.13"
 dependencies = [
