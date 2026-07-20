@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     prep_min_sec: float = 1.0           # 세그 최소 길이 — 미만이면 이웃과 병합
     prep_max_sec: float = 30.0          # 세그 최대 길이 — 초과하면 균등분할
     prep_min_scene_frames: int = 15     # 컷 간 최소 프레임 간격
+    prep_frame_skip: int = 0            # 분할 시 N프레임 건너뛰고 1장 검사(0=전 프레임).
+                                        # 속도 ×(N+1), 컷 정밀도 하락 트레이드오프 — 기본 0 권장
 
     # --- 프레임 추출(ffmpeg CPU) ---
     # 세그당 프레임 수 = max(1, round(길이 × prep_fps)) — 최소 1장 보장(짧은 세그도 대표 1장).

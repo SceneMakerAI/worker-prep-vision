@@ -45,12 +45,13 @@ async def run_prep(
 
     # 1) 분할(scenedetect, CPU 블로킹 → 오프로드)
     windows = await asyncio.to_thread(
-        detect_windows, 
-        source, 
-        settings.prep_threshold, 
+        detect_windows,
+        source,
+        settings.prep_threshold,
         settings.prep_min_sec,
-        settings.prep_max_sec, 
-        settings.prep_min_scene_frames
+        settings.prep_max_sec,
+        settings.prep_min_scene_frames,
+        settings.prep_frame_skip
     )
     
     if not windows:

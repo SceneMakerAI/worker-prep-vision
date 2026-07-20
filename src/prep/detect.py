@@ -45,7 +45,8 @@ def _postprocess(
 
 
 def detect_windows(
-    path: Path, threshold: float, min_sec: float, max_sec: float, min_scene_frames: int)-> list[tuple[int, int, int]]:
+    path: Path, threshold: float, min_sec: float, max_sec: float, min_scene_frames: int,
+    frame_skip: int = 0) -> list[tuple[int, int, int]]:
     """
     Summary:
         원본 영상을 scenedetect 로 분석해 (seg_id, start_sec, end_sec) 세그먼트 타일을 반환한다.
@@ -55,6 +56,7 @@ def detect_windows(
         min_sec (float): 세그 최소 길이 — 미만이면 이웃과 병합.
         max_sec (float): 세그 최대 길이 — 초과하면 균등분할.
         min_scene_frames (int): 컷 간 최소 프레임 간격.
+        frame_skip (int): N프레임 건너뛰고 1장만 검사(0=전 프레임). 속도↑·컷 정밀도↓.
     Returns:
         list[tuple[int, int, int]]: (seg_id, start_sec, end_sec) 정수 초 타일(틈·겹침 없음).
     Description:
@@ -67,7 +69,7 @@ def detect_windows(
     video = open_video(str(path))
     sm = SceneManager()
     sm.add_detector(ContentDetector(threshold=threshold, min_scene_len=min_scene_frames))
-    sm.detect_scenes(video, show_progress=False)
+    sm.detect_scenes(video, frame_skip=frame_skip, show_progress=False)
     
     scenes = [(s.get_seconds(), e.get_seconds()) for s, e in sm.get_scene_list()]
     total = video.duration.get_seconds()

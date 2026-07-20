@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
         log.info("== shutdown WORKER PREP VISION ==")
 
 
-app = FastAPI(title="Worker Prep Vision", version="0.1.1", lifespan=lifespan)
+app = FastAPI(title="Worker Prep Vision", version="0.1.2", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)
