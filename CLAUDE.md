@@ -1,62 +1,60 @@
 # worker-prep-vision — SceneMaker 영상 전처리 워커
 
-원본 영상을 **scenedetect 로 동적 분할**하고, 세그먼트별 **대표 프레임(jpg)을 사전추출**한 뒤
-**t_segment 에 사전등록**하는 FastAPI 워커. agent-vision 1차 분석이 곧바로 돌 수 있는 상태로 v_id 를
-준비한다. 구조·관례는 형제 모듈 `agent/agent-vision` 을 계승한다.
+원본 영상을 scenedetect 로 동적 분할하고 세그먼트별 대표 프레임을 사전추출해 t_segment 에
+사전등록하는 FastAPI 워커. 구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
 
-## 처리 흐름
-```
-POST /api/v1/prep {v_id, file_name, force}  → 202 (즉시)
-  └ background: 원본확인 → scenedetect 분할 → 프레임 추출(ffmpeg CPU) → t_segment 등록(2001)
-                → t_video 상태(1002 전처리완료)
-이후: STT(대사) 완료 → 상류가 agent-vision 분석 호출(별도 모듈)
-```
-- **분할=구조앵커 아님, 시간 타일**: 콘텐츠 변화 기반 동적 경계(고정 그리드 아님). 정수 초 스냅·
-  min/max 병합분할로 청크명·t_segment 정합.
-- **프레임 정책**: 세그당 `max(1, round(길이×PREP_FPS))` 장 — 짧은 세그도 최소 1장, 긴 세그는 fps 비례.
-  각 세그를 n등분한 소구간 **중앙 시각**에서 추출(경계 전환/블랙 회피). 해상도 native(추후 scale 옵션).
-- **file:// 정합**: 산출 `{frames_root}/{v_id}/seg{id:05d}/f{i:03d}.jpg` 는 agent-vision `frame_paths`
-  (image 모드 vLLM file:// 입력) 규칙과 일치 — agent-vision 은 읽기만 한다.
-- **오디오 미사용**: 이 워커는 프레임만 다룬다(sounds 레인 없음).
+## 문서 안내 — 자세한 내용은 필요할 때 해당 문서를 읽을 것
 
-## 배포 전제
-- **원본과 같은 호스트에 배포** — 원본(`{VOD_ROOT}/{v_id}/{file_name}`)·프레임을 **로컬 파일**로
-  접근(ssh 아님). 원본 파일명은 prep 요청(`file_name`)으로 받고, 원본은 상류가 미리 그 경로에 가져다 둔다.
-- ffmpeg 은 **CPU 모드**(nvenc 아님, 현 단계). scenedetect+opencv 로 분할.
+| 문서 | 언제 읽나 |
+|------|----------|
+| [README.md](README.md) | 서비스 개요·API 스펙·설치·배포 절차 |
+| [.aidoc/architecture.md](.aidoc/architecture.md) | 계층 구조·처리 흐름·DB 계약·상태코드·동시성 모델 |
+| [.aidoc/detection.md](.aidoc/detection.md) | 분할 알고리즘·파라미터 의미와 튜닝·병렬 탐지 설계·품질 검증 이력 |
+| [.aidoc/operations.md](.aidoc/operations.md) | 배포·update.sh·로그·트러블슈팅·성능 기준치 |
 
-## 항상 지킬 핵심 (agent-vision 계승)
-- **`src/` 가 import 루트**(`PYTHONPATH=src`, `[tool.uv] package=false` 비패키지 앱).
-  import 는 `from prep...`·`from api...`·`from persistence...`·`from config import ...` — `from src...` 아님.
-- **설정은 전부 `config.Settings`(.env) 경유 — 하드코딩 금지.** `.env` gitignore, `.env.example` 만 추적.
-  IP·접속정보는 추적 파일에 placeholder(`<db-host>`)로만.
-- **계층 경계**: 미디어 처리(분할·프레임)=`prep/`, HTTP 경계=`api/`, DB=`persistence/`(통로 `db.py`,
-  쿼리 `*Repo`). 블로킹(scenedetect·ffmpeg)은 `asyncio.to_thread` 로 오프로드.
-- **DB=SSOT**: 세그먼트 목록은 파일시스템이 아니라 t_segment. 이 워커는 t_segment 를 **생성만**(결과
-  write 는 agent-vision 몫).
-- docstring 한국어 Summary/Args/Returns/Description, 린트 ruff(line-length 100).
-- **주석 위생**: 코드 되풀이 무의미 주석·날짜 스탬프 금지. 남기는 주석은 *왜*(설계 근거·함정)만.
+이 파일에는 **규칙만** 둔다. 구현 상세를 여기 늘리지 말고 위 문서에 쓸 것.
+
+## 코딩 규칙
+
+- **`src/` 가 import 루트**(`PYTHONPATH=src`, 비패키지 앱). import 는 `from prep...`·
+  `from api...`·`from persistence...`·`from config import ...` — `from src...` 아님.
+- **계층 경계 준수**: HTTP=`api/`, 미디어 처리=`prep/`, DB=`persistence/`(통로 `db.py`,
+  쿼리 `*Repo`). 계층 침범 코드 금지.
+- 블로킹 작업(scenedetect·ffmpeg)은 반드시 `asyncio.to_thread` 로 오프로드 — 이벤트 루프를
+  막는 코드 금지.
+- docstring 은 한국어 Summary/Args/Returns/Description. 린트 ruff(line-length 100).
+- **주석 위생**: 코드 되풀이 주석·날짜 스탬프 금지. 남기는 주석은 *왜*(설계 근거·함정)만.
+- 병렬 탐지 워커 함수는 spawn 으로 실행된다 — 모듈 최상위에 두고, detect 를 호출하는
+  스크립트에는 `if __name__ == "__main__":` 가드 필수.
+
+## 공통 규칙 (설계 불변식)
+
+- **설정은 전부 `config.Settings`(.env) 경유 — 하드코딩 금지.** 배포별 값은 기본값 없이
+  필수(fail-fast). 시간 관련 설정은 프레임 수가 아니라 **초 단위**로 통일한다.
+- **DB=SSOT**: 세그먼트 목록의 진실원천은 t_segment(파일시스템 아님). 이 워커는 t_segment
+  를 **생성만** 한다 — 분석 결과 write 금지(하류 몫).
+- 원본 파일명은 API 요청(`file_name`)으로 받는다 — 설정·소스에 파일명 하드코딩 금지.
+- 산출 프레임 경로 규칙 `{frames_root}/{v_id}/seg{id:05d}/f{i:03d}.jpg` 은 하류(agent-vision)
+  와의 계약 — 임의 변경 금지.
+
+## 보안 규칙
+
+- **`.env` 절대 커밋 금지**(gitignore 확인). 추적 파일(.env.example·문서·유닛·스크립트)에는
+  IP·포트·계정·비밀번호·내부 서버명(호스트명)을 쓰지 않는다 — placeholder(`<db-host>`)만.
+- 외부 입력이 **파일 경로에 닿으면 반드시 검증**: `file_name` 은 경로 구분자·`..`·절대경로
+  차단(PrepRequest validator). 새 입력 필드를 추가할 때도 동일 원칙.
+- SQL 은 **파라미터 바인딩(%s)만** — f-string/format/문자열 연결로 SQL 조립 금지.
+- subprocess 는 리스트 argv 만 — `shell=True` 금지.
+- 시크릿은 로그·응답에 노출 금지(`Settings.__str__` 의 db_pw 마스킹 유지). 500 응답에
+  스택트레이스 미노출(전역 핸들러) 유지.
+- 이 저장소는 **공개 레포** — 커밋 전 내부 정보(서버명·IP·운영 수치의 식별 가능 정보) 여부를
+  항상 점검한다. 권한 구성(sudo 정책 등) 서술도 문서에 남기지 않는다.
 
 ## 실행
+
 ```bash
-uv sync
-PYTHONPATH=src uv run python src/run.py          # .env 의 APP_HOST/APP_PORT 로 서빙
-# 헬스: GET /healthz(생존) · /readyz(DB+ffmpeg)
-# 전처리: POST /api/v1/prep {"v_id": 1010, "file_name": "source.mp4", "force": true}
+uv sync && cp .env.example .env      # .env 채우기
+PYTHONPATH=src uv run python src/run.py
+# 헬스: /healthz /readyz · 전처리: POST /api/v1/prep {"v_id":1010,"file_name":"source.mp4","force":true}
+# 린트: uv run ruff check src
 ```
-
-## 배포·업데이트
-- 배포 서버 경로 `/usr/service/source/scenemaker/worker/worker-prep-vision`, systemd
-  `prep-vision.service` — **`deploy/prep-vision.service` 가 정본**(서버 유닛은 update.sh 가 동기화).
-- **자체 업데이트**: 개발 머신에서 main 에 push → 배포 서버에서 `deploy/update.sh` 실행.
-  (fetch → `reset --hard origin/main` → `uv sync --frozen` → 유닛 갱신 → 재시작 → readyz 대기.
-  `.env` 는 미추적이라 보존됨. 변경 없으면 no-op, `--force` 로 강제.)
-- 최초 1회 부트스트랩: 배포 디렉토리에서 `git init && git remote add origin <repo-url>
-  && git fetch origin && git reset --hard origin/main`.
-
-## 상태
-- **골격 스캐폴딩 완료.** app/config/log/run + api(router·health·prep) + persistence(db·segments·videos)
-  + prep(detect·frames·pipeline). 분할 로직은 agent-vision `onboard_detect` 의 검증본 이식.
-- **미확정/다음**:
-  - t_video 완료 상태코드(현재 `1002 FFMPEG_DONE` 로 세팅) — 상류 STT/파이프라인 상태머신과 최종 정합 확인 필요.
-  - 대량 세그(수천) 프레임 추출 성능(CPU per-frame seek) — 필요 시 세그 1콜 배치추출로 최적화.
-  - 실사용 검증(실제 v_id 로 prep→프레임 산출→agent-vision image 모드 분석 파리티).
