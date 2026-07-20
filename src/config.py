@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     prep_detect_fps: float = 0          # 분할 검사 밀도(초당 검사 프레임 수). 0=원본 전 프레임.
                                         # 영상 fps 와 무관한 시간 기준 — 실제 skip 은 원본 fps 에서 환산.
                                         # 낮출수록 분할 빨라지고 컷 정밀도 하락 — 기본 0(전 프레임) 권장
+    prep_detect_workers: int = 0        # 분할 병렬 프로세스 수(0·1=단일 패스). 시간축 청크 분담 —
+                                        # 이음새는 경계로 승격되지 않음(실제 감지 컷 합집합만 사용)
 
     # --- 프레임 추출(ffmpeg CPU) ---
     # 세그당 프레임 수 = max(1, round(길이 × prep_fps)) — 최소 1장 보장(짧은 세그도 대표 1장).
