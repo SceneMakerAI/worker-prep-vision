@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     prep_threshold: float = 18.0        # 낮을수록 컷 촘촘
     prep_min_sec: float = 1.0           # 세그 최소 길이 — 미만이면 이웃과 병합
     prep_max_sec: float = 30.0          # 세그 최대 길이 — 초과하면 균등분할
-    prep_frame_skip: int = 0            # 분할 시 N프레임 건너뛰고 1장 검사(0=전 프레임).
-                                        # 속도 ×(N+1), 컷 정밀도 하락 트레이드오프 — 기본 0 권장
+    prep_detect_fps: float = 0          # 분할 검사 밀도(초당 검사 프레임 수). 0=원본 전 프레임.
+                                        # 영상 fps 와 무관한 시간 기준 — 실제 skip 은 원본 fps 에서 환산.
+                                        # 낮출수록 분할 빨라지고 컷 정밀도 하락 — 기본 0(전 프레임) 권장
 
     # --- 프레임 추출(ffmpeg CPU) ---
     # 세그당 프레임 수 = max(1, round(길이 × prep_fps)) — 최소 1장 보장(짧은 세그도 대표 1장).

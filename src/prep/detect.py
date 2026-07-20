@@ -46,7 +46,7 @@ def _postprocess(
 
 def detect_windows(
     path: Path, threshold: float, min_sec: float, max_sec: float,
-    frame_skip: int = 0) -> list[tuple[int, int, int]]:
+    detect_fps: float = 0) -> list[tuple[int, int, int]]:
     """
     Summary:
         원본 영상을 scenedetect 로 분석해 (seg_id, start_sec, end_sec) 세그먼트 타일을 반환한다.
@@ -55,7 +55,7 @@ def detect_windows(
         threshold (float): ContentDetector threshold(낮을수록 촘촘).
         min_sec (float): 세그 최소 길이 — 탐지 단계 최소 컷 간격으로도 쓰이고, 미만이면 이웃과 병합.
         max_sec (float): 세그 최대 길이 — 초과하면 균등분할.
-        frame_skip (int): N프레임 건너뛰고 1장만 검사(0=전 프레임). 속도↑·컷 정밀도↓.
+        detect_fps (float): 검사 밀도(초당 검사 프레임 수, 0=전 프레임). 영상 fps 에서 skip 환산.
     Returns:
         list[tuple[int, int, int]]: (seg_id, start_sec, end_sec) 정수 초 타일(틈·겹침 없음).
     Description:
@@ -68,6 +68,8 @@ def detect_windows(
     video = open_video(str(path))
     # 컷 간 최소 간격은 별도 설정 없이 min_sec 에서 유도 — fps 무관하게 '최소 세그 길이' 정책과 일관
     min_scene_len = max(1, round(min_sec * video.frame_rate))
+    # 검사 밀도(detect_fps, 시간 기준)를 원본 fps 기준 skip 으로 환산 — 소스 fps 가 달라도 동일 밀도
+    frame_skip = max(0, round(video.frame_rate / detect_fps) - 1) if detect_fps > 0 else 0
     sm = SceneManager()
     sm.add_detector(ContentDetector(threshold=threshold, min_scene_len=min_scene_len))
     sm.detect_scenes(video, frame_skip=frame_skip, show_progress=False)
@@ -76,6 +78,7 @@ def detect_windows(
     total = video.duration.get_seconds()
     
     windows = _postprocess(scenes or [(0.0, total)], total, min_sec, max_sec)
-    log.info("분할: %s (threshold=%s) → %d세그(총 %.0fs)", path.name, threshold, len(windows), total)
+    log.info("분할: %s (threshold=%s, skip=%d) → %d세그(총 %.0fs)",
+             path.name, threshold, frame_skip, len(windows), total)
     
     return windows
