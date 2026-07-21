@@ -12,7 +12,7 @@ from pydantic import BaseModel, field_validator
 from config import Settings, get_settings
 from persistence.segments import SegmentRepo
 from persistence.videos import VideoRepo
-from prep.pipeline import run_prep
+from prep.pipeline import get_prep_timings, run_prep
 from log import get_logger
 
 log = get_logger(__name__)
@@ -55,6 +55,9 @@ class PrepStatus(BaseModel):
     v_id: int
     status: int
     segments: int
+    # 최근 성공 prep 의 단계별 소요초 {detect, frames, db, total} — 프로세스 메모리 보관이라
+    # 서버 재시작 후에는 None(과거 이력은 로그 참조)
+    timings: dict[str, float] | None = None
 
 
 @router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted)
@@ -127,4 +130,5 @@ async def prep_status(v_id: int, request: Request):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=v_id))
     segments = await SegmentRepo(db).count(v_id)
-    return PrepStatus(v_id=v_id, status=video["status_code"], segments=segments)
+    return PrepStatus(v_id=v_id, status=video["status_code"], segments=segments,
+                      timings=get_prep_timings(v_id))
