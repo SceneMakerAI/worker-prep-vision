@@ -59,11 +59,12 @@ agent-vision 은 이 경로를 **읽기만** 한다.
 - **t_video**: `v_id, cate_id, name, segment_sec, dir, status_code` — duration 컬럼 없음
   (영상 길이는 scenedetect 가 원본에서 직접 읽음).
 - **t_segment**: PK (v_id, seg_id). 이 워커는 `start_time/end_time(SEC_TO_TIME),
-  motion_score, status_code=2001, status_reason='PENDING'` 으로 **생성만** 한다. 분석 결과
+  frame_cnt, status_code=2001, status_reason='PENDING'` 으로 **생성만** 한다. 분석 결과
   컬럼(summary·replay 등)은 하류 몫.
-- **motion_score**(FLOAT NULL): 분할 시 ContentDetector 가 계산한 프레임별 content_val 의
-  세그 내 **중앙값**. 분할의 부산물이라 등록 INSERT 에 포함(사후 UPDATE 아님 — '생성만'
-  계약 유지). 픽셀 변화 기반 근사 모션 지표로, 슬로모·정지 구간 1차 필터링 용도.
+- **frame_cnt**(SMALLINT UNSIGNED NULL): 해당 세그에 **실제 추출 성공한** 프레임(jpg) 수.
+  추출 결과의 부산물이라 등록 INSERT 에 포함(사후 UPDATE 아님 — '생성만' 계약 유지).
+  하류는 디렉토리 나열 없이 f{000..N-1}.jpg 존재를 이 값으로 신뢰할 수 있다
+  (실패 프레임이 있으면 계획 수보다 작을 수 있음).
 - 재요청 가드(409)·force 선행을 전제로 plain INSERT — PK 중복은 레이스/버그 신호이므로
   예외로 터뜨린다(삼키지 않음).
 

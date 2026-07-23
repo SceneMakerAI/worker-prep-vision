@@ -54,7 +54,7 @@ async def run_prep(
 
     # 1) 분할(scenedetect, CPU 블로킹 → 오프로드)
     t0 = time.monotonic()
-    windows, motions = await asyncio.to_thread(
+    windows = await asyncio.to_thread(
         detect_windows,
         source,
         settings.prep_threshold,
@@ -79,7 +79,7 @@ async def run_prep(
     t2 = time.monotonic()
     if force:
         await segrepo.delete_by_video(v_id)
-    inserted = await segrepo.create_pending(v_id, windows, motions)
+    inserted = await segrepo.create_pending(v_id, windows, fstats["per_seg"])
     t_db = time.monotonic() - t2
 
     # 4) t_video 상태 — 전처리 완료(STT 대기)

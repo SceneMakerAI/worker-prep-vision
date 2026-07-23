@@ -51,12 +51,15 @@ def extract_frames(source: Path, windows: list[tuple[int, int, int]], settings: 
         settings (Settings): fps·scale·quality·동시성·frames_root.
         v_id (int): 대상 영상 id(출력 경로 구성).
     Returns:
-        dict: {"segments": 처리 세그수, "frames": 추출 프레임수, "failed": 실패 프레임수}.
+        dict: {"segments": 처리 세그수, "frames": 추출 프레임수, "failed": 실패 프레임수,
+               "per_seg": {seg_id: 실제 추출 성공 장수}}.
     Description:
         - CPU 블로킹(ffmpeg×N) — 호출자가 asyncio.to_thread 로 감싼다. 내부는 스레드풀 병렬.
         - 세그 디렉토리는 재실행 안전을 위해 비우고 새로 채운다(force 시 상위에서 v_id 째 지움).
+        - per_seg 는 계획 수가 아니라 **성공 수** — t_segment.frame_cnt 로 등록되어 하류가
+          디렉토리 나열 없이 f{i:03d}.jpg 개수를 신뢰할 수 있게 한다.
     """
-    jobs: list[tuple[float, Path]] = []
+    jobs: list[tuple[int, float, Path]] = []
     for seg_id, start, end in windows:
         d = settings.seg_frame_dir(v_id, seg_id)
         if d.exists():
@@ -64,15 +67,18 @@ def extract_frames(source: Path, windows: list[tuple[int, int, int]], settings: 
         d.mkdir(parents=True, exist_ok=True)
         n = frame_count(end - start, settings.prep_fps)
         for i, ts in enumerate(_timestamps(start, end, n)):
-            jobs.append((ts, d / f"f{i:03d}.jpg"))
+            jobs.append((seg_id, ts, d / f"f{i:03d}.jpg"))
 
-    ok = 0
+    per_seg = dict.fromkeys((seg_id for seg_id, _, _ in windows), 0)
     with ThreadPoolExecutor(max_workers=settings.prep_concurrency) as ex:
         results = ex.map(
-            lambda job: _extract_one(source, job[0], job[1], settings.prep_scale, settings.prep_jpg_quality),
+            lambda job: _extract_one(source, job[1], job[2], settings.prep_scale, settings.prep_jpg_quality),
             jobs)
-        ok = sum(1 for r in results if r)
+        for (seg_id, _, _), r in zip(jobs, results):
+            if r:
+                per_seg[seg_id] += 1
 
-    stats = {"segments": len(windows), "frames": ok, "failed": len(jobs) - ok}
+    ok = sum(per_seg.values())
+    stats = {"segments": len(windows), "frames": ok, "failed": len(jobs) - ok, "per_seg": per_seg}
     log.info("프레임 추출: v_id=%s, %d세그 → %d장(실패 %d)", v_id, stats["segments"], stats["frames"], stats["failed"])
     return stats
