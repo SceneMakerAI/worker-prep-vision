@@ -21,28 +21,35 @@ class SegmentRepo:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def create_pending(self, v_id: int, windows: list[tuple[int, int, int]]) -> int:
+    async def create_pending(self, v_id: int, windows: list[tuple[int, int, int]],
+                             motion_scores: list[float | None] | None = None) -> int:
         """
         Summary:
             세그먼트 윈도우를 t_segment 에 '장면 입력'(2001, 분석 대기) 상태로 사전 등록한다.
         Args:
             v_id (int): 대상 영상 id.
             windows (list[tuple[int, int, int]]): (seg_id, start_sec, end_sec) 목록.
+            motion_scores (list[float | None] | None): windows 와 같은 순서의 세그별 모션 점수
+                (분할 시 계산된 content_val 중앙값). None 이면 전부 NULL.
         Returns:
             int: 삽입된 행 수.
         Description:
             - 재요청 차단(상태 가드)·force 선행을 전제로 plain INSERT. 중복(PK)은 레이스/버그
               신호이므로 예외로 터진다(삼키지 않음).
             - start/end 초는 SEC_TO_TIME() 으로 TIME 컬럼에 넣는다.
+            - motion_score 는 분할 부산물이라 등록 시점에 함께 INSERT 한다(사후 UPDATE 아님 —
+              '생성만 한다' 계약 유지).
         """
         if not windows:
             return 0
+        scores = motion_scores if motion_scores is not None else [None] * len(windows)
         sql = (
             "INSERT INTO t_segment "
-            "(v_id, seg_id, start_time, end_time, status_code, status_reason) "
-            "VALUES (%s, %s, SEC_TO_TIME(%s), SEC_TO_TIME(%s), %s, %s)"
+            "(v_id, seg_id, start_time, end_time, motion_score, status_code, status_reason) "
+            "VALUES (%s, %s, SEC_TO_TIME(%s), SEC_TO_TIME(%s), %s, %s, %s)"
         )
-        params = [(v_id, seg_id, start, end, STATUS_INPUT, "PENDING") for seg_id, start, end in windows]
+        params = [(v_id, seg_id, start, end, score, STATUS_INPUT, "PENDING")
+                  for (seg_id, start, end), score in zip(windows, scores)]
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.executemany(sql, params)
