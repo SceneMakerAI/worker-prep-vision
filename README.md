@@ -5,7 +5,7 @@ SceneMaker **영상 전처리 워커** — 원본 영상을 scenedetect 로 **�
 후속 분석(agent-vision)이 곧바로 돌 수 있는 상태로 영상(v_id)을 준비한다.
 
 ```
-POST /api/v1/prep {v_id, file_name, force}  →  202 (즉시 접수)
+POST /api/v1/prep/segment {v_id, file_name[, force, category]}  →  202 (즉시 접수)
   └ background: 원본 확인 → scenedetect 동적 분할 → 프레임 추출(ffmpeg)
                 → t_segment 사전등록 → t_video 상태 갱신
 ```
@@ -43,19 +43,22 @@ curl http://127.0.0.1:<APP_PORT>/readyz    # DB + ffmpeg 준비 (미준비 시 5
 
 ## API
 
-### `POST /api/v1/prep` — 전처리 접수
+### `POST /api/v1/prep/segment` — 전처리 접수
 
 ```bash
-curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep \
+curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep/segment \
   -H "Content-Type: application/json" \
-  -d '{"v_id": 1010, "file_name": "source.mp4", "force": false}'
+  -d '{"v_id": 1010, "file_name": "source.mp4"}'
 ```
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `v_id` | int | 대상 영상 id (t_video 에 존재해야 함) |
-| `file_name` | str | `{VOD_ROOT}/{v_id}/` 아래 원본 파일명. **경로 구분자·상위참조 불가** |
-| `force` | bool | 기존 세그먼트 삭제 후 재전처리 (기본 false) |
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `v_id` | int | ✓ | 대상 영상 id (t_video 에 존재해야 함) |
+| `file_name` | str | ✓ | `{VOD_ROOT}/{v_id}/` 아래 원본 파일명. **경로 구분자·상위참조 불가** |
+| `force` | bool | — | 기존 세그먼트 삭제 후 재전처리 (기본 `false`) |
+| `category` | str\|null | — | 영상 종류별 분할 튜닝 프리셋용 예약 필드 (기본 `null`, 현재 미사용) |
+
+구경로 `POST /api/v1/prep` 는 호환용 별칭(deprecated) — 호출처 전환이 끝나면 제거 예정.
 
 응답 `202`: `{"v_id": 1010, "accepted": true, "source": "<원본 경로>"}` — 실제 작업은 백그라운드.
 
@@ -65,10 +68,10 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep \
 | 409 | `ALREADY_PREPPED` | 이미 세그먼트 존재 — 재실행은 `force=true` |
 | 422 | — | `file_name` 검증 실패(경로 탈출 시도 등) |
 
-### `GET /api/v1/prep/{v_id}` — 진행 상태
+### `GET /api/v1/prep/segment/{v_id}` — 진행 상태
 
 ```bash
-curl http://127.0.0.1:<APP_PORT>/api/v1/prep/1010
+curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
 # {"v_id": 1010, "status": 1002, "segments": 1678}
 ```
 

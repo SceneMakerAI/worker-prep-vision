@@ -1,7 +1,8 @@
 """전처리 요청 라우터 — 영상(v_id) 단위 장면분할 + 프레임 추출 + t_segment 사전등록.
 
-POST /prep {v_id, file_name, force} → 즉시 202, 실제 작업(scenedetect·ffmpeg)은 백그라운드.
-GET /prep/{v_id} 로 상태. 대상·결과는 파일시스템이 아니라 t_segment(DB)가 단일 진실원천이다.
+POST /prep/segment {v_id, file_name[, force, category]} → 즉시 202, 실제 작업은 백그라운드.
+GET /prep/segment/{v_id} 로 상태. 대상·결과는 파일시스템이 아니라 t_segment(DB)가 단일 진실원천.
+구경로 /prep·/prep/{v_id} 는 상류 호환용 별칭 — 호출처 전환이 끝나면 제거한다.
 """
 
 from pathlib import Path
@@ -29,10 +30,11 @@ def _error(code: str, message: str, **ctx) -> dict:
 
 
 class PrepRequest(BaseModel):
-    """전처리 요청 — v_id·원본 파일명·재-prep 여부(force)."""
+    """전처리 요청 — v_id·원본 파일명(필수), force·category(옵션, 미지정 시 기본값)."""
     v_id: int
-    file_name: str        # {VOD_ROOT}/{v_id}/ 바로 아래의 원본 파일명 (경로 아님)
+    file_name: str               # {VOD_ROOT}/{v_id}/ 바로 아래의 원본 파일명 (경로 아님)
     force: bool = False
+    category: str | None = None  # 추후 영상 종류별 분할 튜닝 프리셋용 — 현재는 접수 로그만 남김
 
     @field_validator("file_name")
     @classmethod
@@ -60,7 +62,9 @@ class PrepStatus(BaseModel):
     timings: dict[str, float] | None = None
 
 
-@router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted)
+@router.post("/prep/segment", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted)
+@router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted,
+             deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
 async def prep(
     req: PrepRequest,
     background: BackgroundTasks,
@@ -107,14 +111,19 @@ async def prep(
         )
 
     background.add_task(run_prep, db, settings, req.v_id, req.file_name, req.force)
-    log.info("전처리 접수: v_id=%s file=%s (force=%s)", req.v_id, req.file_name, req.force)
+    log.info("전처리 접수: v_id=%s file=%s (force=%s, category=%s)",
+             req.v_id, req.file_name, req.force, req.category)
     
     return PrepAccepted(
         v_id=req.v_id, accepted=True, source=str(settings.source_path(req.v_id, req.file_name))
     )
 
 
-@router.get("/prep/{v_id}", response_model=PrepStatus)
+@router.get("/prep/{v_id}", response_model=PrepStatus,
+            deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
+@router.get("/prep/segment/{v_id}", response_model=PrepStatus)
+# 데코레이터는 함수에 가까운 쪽이 먼저 등록됨 — 구체 경로(/prep/segment/{v_id})가
+# /prep/{v_id} 보다 먼저 매칭돼야 하므로 이 순서를 바꾸지 말 것.
 async def prep_status(v_id: int, request: Request):
     """
     Summary:

@@ -13,7 +13,7 @@ src/
 ├─ api/              # HTTP 경계 — 검증·상태코드·에러 본문만. 도메인 로직 없음
 │  ├─ router.py      #   /api/v1 집계
 │  ├─ health.py      #   /healthz(생존) · /readyz(DB+ffmpeg, 미준비 503)
-│  └─ prep.py        #   POST /prep(202 접수) · GET /prep/{v_id}(상태)
+│  └─ prep.py        #   POST /prep/segment(202) · GET /prep/segment/{v_id} (구경로 별칭 유지)
 ├─ prep/             # 미디어 처리 — CPU 블로킹은 전부 asyncio.to_thread 로 오프로드
 │  ├─ detect.py      #   scenedetect 분할 + 정수 초 타일 후처리(+ 청크 병렬)
 │  ├─ frames.py      #   ffmpeg 프레임 추출(스레드풀 병렬)

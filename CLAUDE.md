@@ -55,6 +55,6 @@
 ```bash
 uv sync && cp .env.example .env      # .env 채우기
 PYTHONPATH=src uv run python src/run.py
-# 헬스: /healthz /readyz · 전처리: POST /api/v1/prep {"v_id":1010,"file_name":"source.mp4","force":true}
+# 헬스: /healthz /readyz · 전처리: POST /api/v1/prep/segment {"v_id":1010,"file_name":"source.mp4","force":true}
 # 린트: uv run ruff check src
 ```
