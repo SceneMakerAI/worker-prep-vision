@@ -21,14 +21,14 @@ class SegmentRepo:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def create_pending(self, v_id: int, windows: list[tuple[int, int, int]],
+    async def create_pending(self, v_id: int, windows: list[tuple[int, float, float]],
                              frame_counts: dict[int, int] | None = None) -> int:
         """
         Summary:
             세그먼트 윈도우를 t_segment 에 '장면 입력'(2001, 분석 대기) 상태로 사전 등록한다.
         Args:
             v_id (int): 대상 영상 id.
-            windows (list[tuple[int, int, int]]): (seg_id, start_sec, end_sec) 목록.
+            windows (list[tuple[int, float, float]]): (seg_id, start_sec, end_sec) 목록(밀리초 정밀).
             frame_counts (dict[int, int] | None): seg_id → 실제 추출 성공한 프레임(jpg) 수.
                 None(또는 누락 seg)은 NULL 로 들어간다.
         Returns:
@@ -36,7 +36,7 @@ class SegmentRepo:
         Description:
             - 재요청 차단(상태 가드)·force 선행을 전제로 plain INSERT. 중복(PK)은 레이스/버그
               신호이므로 예외로 터진다(삼키지 않음).
-            - start/end 초는 SEC_TO_TIME() 으로 TIME 컬럼에 넣는다.
+            - start/end 초(소수 포함)는 SEC_TO_TIME() 으로 TIME(3) 컬럼에 넣는다 — 밀리초 보존.
             - frame_cnt 는 추출 결과의 부산물이라 등록 시점에 함께 INSERT 한다(사후 UPDATE
               아님 — '생성만 한다' 계약 유지).
         """

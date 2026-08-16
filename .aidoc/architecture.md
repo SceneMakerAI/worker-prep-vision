@@ -32,7 +32,7 @@ src/
 
 ```
 1. 원본 확인    settings.source_path(v_id, file_name) 부재 → t_video=-1, 종료
-2. 분할        detect_windows() → [(seg_id, start, end)] 정수 초 타일 (to_thread)
+2. 분할        detect_windows() → [(seg_id, start, end)] 밀리초 스냅 타일 (to_thread)
 3. 프레임 추출  extract_frames() → {frames_root}/{v_id}/seg{id:05d}/f{i:03d}.jpg (to_thread)
 4. 사전등록    force 면 기존 삭제 후 t_segment INSERT (status 2001)
 5. 상태 갱신   t_video → 1002 (전처리 완료)
@@ -61,6 +61,8 @@ agent-vision 은 이 경로를 **읽기만** 한다.
 - **t_segment**: PK (v_id, seg_id). 이 워커는 `start_time/end_time(SEC_TO_TIME),
   frame_cnt, status_code=2001, status_reason='PENDING'` 으로 **생성만** 한다. 분석 결과
   컬럼(summary·replay 등)은 하류 몫.
+- **start_time/end_time**(TIME(3)): 밀리초 정밀 세그 경계. 워커가 소수 초를 그대로
+  SEC_TO_TIME 에 바인딩해 저장한다. 실질 정밀도는 컷의 프레임 간격(30fps ≈ 33ms) 단위.
 - **frame_cnt**(SMALLINT UNSIGNED NULL): 해당 세그에 **실제 추출 성공한** 프레임(jpg) 수.
   추출 결과의 부산물이라 등록 INSERT 에 포함(사후 UPDATE 아님 — '생성만' 계약 유지).
   하류는 디렉토리 나열 없이 f{000..N-1}.jpg 존재를 이 값으로 신뢰할 수 있다

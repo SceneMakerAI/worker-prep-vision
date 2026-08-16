@@ -22,7 +22,7 @@ def frame_count(duration: float, fps: float) -> int:
     return max(1, round(duration * fps))
 
 
-def _timestamps(start: int, end: int, n: int) -> list[float]:
+def _timestamps(start: float, end: float, n: int) -> list[float]:
     """[start, end) 를 n등분한 각 소구간의 중앙 시각 목록(경계 회피)."""
     dur = end - start
     step = dur / n
@@ -42,14 +42,14 @@ def _extract_one(source: Path, ts: float, out: Path, scale: str, quality: int) -
     return r.returncode == 0 and out.is_file()
 
 
-def extract_frames(source: Path, windows: list[tuple[int, int, int]], settings: Settings,
+def extract_frames(source: Path, windows: list[tuple[int, float, float]], settings: Settings,
                    v_id: int) -> dict:
     """
     Summary:
         세그먼트 목록 각각에 대해 대표 프레임 jpg 를 추출해 세그 디렉토리에 저장한다.
     Args:
         source (Path): 원본 영상 로컬 경로.
-        windows (list[tuple[int, int, int]]): (seg_id, start_sec, end_sec) 목록.
+        windows (list[tuple[int, float, float]]): (seg_id, start_sec, end_sec) 목록(밀리초 정밀).
         settings (Settings): fps·scale·quality·동시성·frames_root.
         v_id (int): 대상 영상 id(출력 경로 구성).
     Returns:

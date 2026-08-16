@@ -1,7 +1,7 @@
-"""장면 분할 — scenedetect ContentDetector 로 동적 경계를 잡고 정수 초 타일로 후처리.
+"""장면 분할 — scenedetect ContentDetector 로 동적 경계를 잡고 밀리초 스냅 타일로 후처리.
 
-검증된 로직(agent-vision onboard_detect) 이식: min-sec 병합·max-sec 강제분할·정수 초 스냅으로
-청크명·t_segment 정합을 보장한다. **고정 6초 그리드가 아니라 콘텐츠 변화 기반 동적 경계.**
+검증된 로직(agent-vision onboard_detect) 이식: min-sec 병합·max-sec 강제분할·밀리초 스냅으로
+t_segment(TIME(3)) 정합을 보장한다. **고정 6초 그리드가 아니라 콘텐츠 변화 기반 동적 경계.**
 scenedetect·opencv 는 CPU 블로킹이라 호출자(pipeline)가 asyncio.to_thread 로 감싼다.
 """
 
@@ -48,8 +48,9 @@ def _detect_cuts_range(path_str: str, threshold: float, min_sec: float, detect_f
 
 
 def _postprocess(
-    scenes: list[tuple[float, float]], total: float, min_sec: float, max_sec: float) -> list[tuple[int, int, int]]:
-    """float 장면 → min-sec 병합 → max-sec 강제분할 → 정수 초 틈없는 타일 (seg_id, start, end)."""
+    scenes: list[tuple[float, float]], total: float, min_sec: float, max_sec: float
+) -> list[tuple[int, float, float]]:
+    """float 장면 → min-sec 병합 → max-sec 강제분할 → 밀리초 스냅 틈없는 타일 (seg_id, start, end)."""
     merged: list[list[float]] = []
     for s, e in scenes:
         if merged and (e - s) < min_sec:
@@ -72,16 +73,19 @@ def _postprocess(
         step = dur / n
         split.extend((s + step * i, s + step * (i + 1)) for i in range(n))
 
-    hi = int(round(total))
-    pts = sorted({0} | {int(round(e)) for _, e in split} | {hi})
+    # 밀리초 반올림 스냅 — 같은 값으로 스냅된 경계는 집합에서 자연 병합돼 틈·겹침이 없다.
+    # 컷 정밀도 자체는 프레임 간격(예: 30fps ≈ 33ms) 단위임에 유의.
+    hi = round(total, 3)
+    pts = sorted({0.0} | {round(e, 3) for _, e in split} | {hi})
     pts = [p for p in pts if 0 <= p <= hi]
-    
+
     return [(i + 1, pts[i], pts[i + 1]) for i in range(len(pts) - 1) if pts[i + 1] > pts[i]]
 
 
 def detect_windows(
     path: Path, threshold: float, min_sec: float, max_sec: float,
-    detect_fps: float = 0, workers: int = 0) -> list[tuple[int, int, int]]:
+    detect_fps: float = 0, workers: int = 0
+) -> list[tuple[int, float, float]]:
     """
     Summary:
         원본 영상을 scenedetect 로 분석해 (seg_id, start_sec, end_sec) 세그먼트 타일을 반환한다.
@@ -93,7 +97,7 @@ def detect_windows(
         detect_fps (float): 검사 밀도(초당 검사 프레임 수, 0=전 프레임). 영상 fps 에서 skip 환산.
         workers (int): 병렬 탐지 프로세스 수(0·1=단일 패스). 시간축 청크 분담, 컷 합집합 병합.
     Returns:
-        list[tuple[int, int, int]]: (seg_id, start_sec, end_sec) 정수 초 타일(틈·겹침 없음).
+        list[tuple[int, float, float]]: (seg_id, start_sec, end_sec) 밀리초 스냅 타일(틈·겹침 없음).
     Description:
         - CPU 블로킹(디코딩) — 호출자가 asyncio.to_thread 로 감싼다.
         - 병렬 모드: 청크는 '컷 후보'가 아니라 '탐지 분담 구간' — 이음새는 경계로 승격되지 않고,
@@ -119,8 +123,10 @@ def detect_windows(
         pts = [0.0, *cuts, total]
         scenes = list(zip(pts[:-1], pts[1:]))
         windows = _postprocess(scenes, total, min_sec, max_sec)
-        log.info("분할(병렬 %d워커): %s (threshold=%s, detect_fps=%s) → %d세그(총 %.0fs)",
-                 n, path.name, threshold, detect_fps, len(windows), total)
+        log.info(
+            "분할(병렬 %d워커): %s (threshold=%s, detect_fps=%s) → %d세그(총 %.0fs)", 
+            n, path.name, threshold, detect_fps, len(windows), total
+        )
         return windows
 
     # 단일 패스 — 컷 간 최소 간격은 min_sec 에서, frame_skip 은 detect_fps 에서 유도(fps 무관 일관)
@@ -132,7 +138,9 @@ def detect_windows(
 
     scenes = [(s.get_seconds(), e.get_seconds()) for s, e in sm.get_scene_list()]
     windows = _postprocess(scenes or [(0.0, total)], total, min_sec, max_sec)
-    log.info("분할: %s (threshold=%s, skip=%d) → %d세그(총 %.0fs)",
-             path.name, threshold, frame_skip, len(windows), total)
+    log.info(
+        "분할: %s (threshold=%s, skip=%d) → %d세그(총 %.0fs)", 
+        path.name, threshold, frame_skip, len(windows), total
+    )
 
     return windows
