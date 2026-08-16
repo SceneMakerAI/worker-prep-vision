@@ -32,7 +32,9 @@ def _timestamps(start: int, end: int, n: int) -> list[float]:
 def _extract_one(source: Path, ts: float, out: Path, scale: str, quality: int) -> bool:
     """단일 프레임 추출 — 입력 시킹(-ss before -i)으로 빠르게 1장 뽑아 jpg 저장."""
     vf = [] if scale == "none" else ["-vf", f"scale={scale}"]
-    cmd = ["ffmpeg", "-nostdin", "-y", "-ss", f"{ts:.3f}", "-i", str(source),
+    # -threads 1: 1장 디코딩은 멀티스레드 이득이 없고, 이미 프로세스 단위로 수십 개가 동시에
+    # 돌아 스레드 과잉(코어수×동시성)으로 컨텍스트 스위칭 낭비만 생긴다.
+    cmd = ["ffmpeg", "-nostdin", "-y", "-threads", "1", "-ss", f"{ts:.3f}", "-i", str(source),
            "-frames:v", "1", *vf, "-q:v", str(quality), str(out)]
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0:
