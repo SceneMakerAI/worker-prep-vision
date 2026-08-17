@@ -113,12 +113,3 @@ def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,
     return runs
 
 
-def vote_samples(runs: list[StateRun], group_id: int, k: int) -> list[Path]:
-    """그룹의 판독 표본 — k=1 이면 최장 구간의 중간 장(전환 오염 최소),
-    k≥2 면 그룹 전체에서 시작/중간/끝 등 균등 위치 k장(다수결용)."""
-    files = [p for r in runs if r.group_id == group_id for _, _, p in r.items]
-    if k <= 1:
-        longest = max((r for r in runs if r.group_id == group_id), key=lambda r: r.count)
-        return [longest.items[longest.count // 2][2]]
-    idx = {round(i * (len(files) - 1) / (k - 1)) for i in range(k)}
-    return [files[i] for i in sorted(idx)]

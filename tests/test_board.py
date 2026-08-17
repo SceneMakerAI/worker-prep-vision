@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 
 from board import change, postprocess, select
-from board.dedup import dedup_runs, vote_samples
+from board.dedup import dedup_runs
+from board.reader import resolve_group
 
 RNG = np.random.default_rng(7)
 
@@ -81,13 +82,31 @@ def test_dedup_wide_strip_digit(tmp_path):
     assert len({r.group_id for r in runs}) == 2, "스트립 내 숫자 변화가 그룹 경계로 잡혀야 함"
 
 
-def test_vote_samples(items):
-    runs = dedup_runs(items, mae_th=8.0, min_cnt=2, gap_sec=4.0)
-    gid = runs[0].group_id
-    assert len(vote_samples(runs, gid, 1)) == 1     # 최장 구간의 중간 장
-    three = vote_samples(runs, gid, 3)              # 그룹 전체에서 시작/중간/끝
-    assert len(three) == 3
-    assert three[0].stem == "00000" and three[-1].stem == "00058"
+def test_resolve_group_unanimous():
+    """앵커 만장일치 — 그룹 전체 한 구간, 판독은 앵커 수만큼만."""
+    files = [Path(f"{i:05d}.jpg") for i in range(20)]
+    calls = []
+    def fake(kind, path, settings):
+        calls.append(path)
+        return "1회초", True
+    segs = resolve_group("INNING", files, 3, None, _read=fake)
+    assert segs == [(0, 19, "1회초", True)]
+    assert len(calls) == 3
+
+
+def test_resolve_group_hidden_boundary():
+    """앵커 불일치 — 이분탐색으로 숨은 경계(위치 13)를 정확히 찾아 두 구간으로 확정."""
+    files = [Path(f"{i:05d}.jpg") for i in range(20)]
+    def truth(pos):
+        return "KIA 5: 삼성 2" if pos < 13 else "KIA 6: 삼성 2"
+    reads = []
+    def fake(kind, path, settings):
+        pos = int(path.stem)
+        reads.append(pos)
+        return truth(pos), True
+    segs = resolve_group("TEAM", files, 3, None, _read=fake)
+    assert segs == [(0, 12, "KIA 5: 삼성 2", True), (13, 19, "KIA 6: 삼성 2", True)]
+    assert len(reads) <= 3 + 5, "이분탐색 비용은 log2 수준이어야"
 
 
 def test_sample_by_interval():

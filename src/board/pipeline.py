@@ -16,7 +16,7 @@ from persistence.db import Database
 from persistence.details import BoardDetailRepo
 from persistence.frames import FrameRepo
 from board import change, select
-from board.dedup import StateRun, dedup_runs, vote_samples
+from board.dedup import StateRun, dedup_runs
 from board.reader import ReadFailure, read_groups
 from log import get_logger
 
@@ -96,37 +96,41 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
         _group_kinds, settings, v_id, items, sec_by_idx)
     t_dedup = time.monotonic() - t0
 
-    # 3) 그룹 표본 다수결 판독 (HTTP 병렬 블로킹 → 오프로드)
+    # 3) 그룹 확정 판독 — 앵커 k점, 불일치 그룹은 이분탐색으로 내부 경계까지 확정
     t1 = time.monotonic()
     jobs: list[tuple[str, list[Path]]] = []
+    group_idxs: list[list[int]] = []           # jobs[i] 그룹의 구성원 idx (시간순, files 와 정렬)
     job_key: list[tuple[str, int]] = []
     for kind, runs in runs_by_kind.items():
         for gid in sorted({r.group_id for r in runs}):
-            jobs.append((kind, vote_samples(runs, gid, settings.board_vote_k)))
+            members = [(sec, idx, p) for r in runs if r.group_id == gid
+                       for idx, sec, p in r.items]
+            members.sort()
+            jobs.append((kind, [p for _, _, p in members]))
+            group_idxs.append([idx for _, idx, _ in members])
             job_key.append((kind, gid))
-    log.info("판독 시작: v_id=%s — 항목 %d건 → 그룹 %d개 (표본 %d장/그룹)",
+    log.info("판독 시작: v_id=%s — 항목 %d건 → 그룹 %d개 (앵커 %d점+이분탐색)",
              v_id, len(items), len(jobs), settings.board_vote_k)
     values = await asyncio.to_thread(read_groups, jobs, settings)
     t_read = time.monotonic() - t1
 
-    # 4) txt 저장 — 초기화 후 그룹 값을 구성원 전 행에 전파 (실패 그룹은 빈 채 유지)
+    # 4) txt 저장 — 초기화 후 확정 구간별로 구성원 행에 전파 (실패 그룹은 빈 채 유지)
     t2 = time.monotonic()
     await details.reset_txt(v_id)
-    read_ok = read_failed = txt_rows = 0
-    value_by_key = dict(zip(job_key, values))
-    for kind, runs in runs_by_kind.items():
-        for gid in sorted({r.group_id for r in runs}):
-            val = value_by_key[(kind, gid)]
-            if isinstance(val, ReadFailure):
-                read_failed += 1
-                log.warning("  판독 실패(격리): v_id=%s %s", v_id, val)
-                continue
-            txt, parsed = val
+    read_ok = read_failed = refined = txt_rows = 0
+    for (kind, gid), idxs, val in zip(job_key, group_idxs, values):
+        if isinstance(val, ReadFailure):
+            read_failed += 1
+            log.warning("  판독 실패(격리): v_id=%s %s", v_id, val)
+            continue
+        if len(val) > 1:                   # 픽셀 비교가 놓친 경계를 판독값이 잡아낸 그룹
+            refined += 1
+            log.info("  그룹 내부 경계 확정: v_id=%s %s g%d → %d구간", v_id, kind, gid, len(val))
+        for s, e, txt, parsed in val:
             if not parsed:                 # 원문 저장 — 조용히 버리면 추적 불가
                 log.warning("  후처리 실패(원문 저장): v_id=%s %s g%d: %r", v_id, kind, gid, txt)
-            idxs = [i for r in runs if r.group_id == gid for i in r.idxs]
-            txt_rows += await details.update_txt_many(v_id, kind, idxs, txt)
-            read_ok += 1
+            txt_rows += await details.update_txt_many(v_id, kind, idxs[s:e + 1], txt)
+        read_ok += 1
 
     # 5) 변화 마킹 — 판독값 시계열에서 달라진 프레임에 is_changed=1
     series = await details.fetch_txt_series(v_id)
@@ -138,11 +142,11 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
     timings = {"dedup": round(t_dedup, 1), "read": round(t_read, 1),
                "db": round(t_db, 1), "total": round(time.monotonic() - t0, 1)}
     result = {"v_id": v_id, "groups": len(jobs), "read_ok": read_ok,
-              "read_failed": read_failed, "crop_missing": missing,
+              "read_failed": read_failed, "refined": refined, "crop_missing": missing,
               "txt_rows": txt_rows, "changed": marked, "timings": timings}
     _last_results[v_id] = result
-    log.info("board 완료: v_id=%s — 그룹 %d(실패 %d) → txt %d행 / 변화 %d프레임 (kind별 %s) "
-             "(총 %.1fs = 그룹핑 %.1f + 판독 %.1f + 저장·마킹 %.1f)",
-             v_id, len(jobs), read_failed, txt_rows, marked, per_kind,
+    log.info("board 완료: v_id=%s — 그룹 %d(실패 %d, 내부경계 확정 %d) → txt %d행 / "
+             "변화 %d프레임 (kind별 %s) (총 %.1fs = 그룹핑 %.1f + 판독 %.1f + 저장·마킹 %.1f)",
+             v_id, len(jobs), read_failed, refined, txt_rows, marked, per_kind,
              timings["total"], timings["dedup"], timings["read"], timings["db"])
     return result
