@@ -81,6 +81,7 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
         result = {"v_id": v_id, "error": "NO_TARGETS"}
         _last_results[v_id] = result
         return result
+    
     picked = select.sample_by_interval(targets, settings.board_crop_interval)
     items = await details.fetch_kinds(v_id, [i for i, _ in picked])
     if not items:

@@ -49,8 +49,7 @@ class AnalyzeStatus(BaseModel):
     last_result: dict | None = None
 
 
-@router.post("/board/analyze", status_code=status.HTTP_202_ACCEPTED,
-             response_model=AnalyzeAccepted)
+@router.post("/board/analyze", status_code=status.HTTP_202_ACCEPTED, response_model=AnalyzeAccepted)
 async def analyze(
     req: AnalyzeRequest,
     background: BackgroundTasks,

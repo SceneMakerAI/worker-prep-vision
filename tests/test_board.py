@@ -51,6 +51,21 @@ def test_dedup_runs(items):
     assert not any(r.items[0][1] == 80 for r in runs)
 
 
+def test_dedup_local_change(tmp_path):
+    """국소 변화 비희석 — 작은 영역만 바뀐 크롭(점수 숫자 등)도 새 그룹으로 갈라져야 한다."""
+    items = []
+    for t in range(0, 11, 2):                       # 상태 A: 균일 톤
+        items.append(_crop(tmp_path, t, 180))
+    for t in range(12, 23, 2):                      # 상태 B: 좌상단 1/8 영역만 톤 변화
+        idx, sec, p = _crop(tmp_path, t, 180)
+        img = cv2.imread(str(p))
+        img[:10, :8] = 60                            # 31px 중 8px — 전역 평균으론 희석되는 크기
+        cv2.imwrite(str(p), img)
+        items.append((idx, sec, p))
+    runs = dedup_runs(items, mae_th=8.0, min_cnt=2, gap_sec=4.0)
+    assert len({r.group_id for r in runs}) == 2, "국소 변화가 그룹 경계로 잡혀야 함"
+
+
 def test_vote_samples(items):
     runs = dedup_runs(items, mae_th=8.0, min_cnt=2, gap_sec=4.0)
     gid = runs[0].group_id

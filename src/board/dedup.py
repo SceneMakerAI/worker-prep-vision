@@ -47,6 +47,22 @@ def _feature(path: Path) -> np.ndarray | None:
     return cv2.GaussianBlur(cv2.resize(g, (32, 20)), (3, 3), 0).astype(np.float32)
 
 
+# 타일 분할(4×2) — 비교는 전역 평균이 아니라 '타일별 MAE 의 최대값'으로 한다.
+# 전역 평균은 TEAM 처럼 넓은 스트립에서 점수 숫자 한 자리 변화가 희석돼 임계를 못 넘는다
+# (v200 실측: TEAM 정답률 15% — 경기 전체가 3그룹으로 뭉개짐). 타일 최대값은 국소 변화를
+# 그대로 드러내고, 노이즈 여유(전역 ~1.0, 타일 최대 ~3)가 있어 임계 8 을 유지한다.
+_TILES_X, _TILES_Y = 4, 2
+
+
+def _diff(a: np.ndarray, b: np.ndarray) -> float:
+    """두 특징의 차이 — 타일별 MAE 중 최대값(국소 변화 비희석)."""
+    d = np.abs(a - b)
+    h, w = d.shape
+    th, tw = h // _TILES_Y, w // _TILES_X
+    return max(float(d[y * th:(y + 1) * th, x * tw:(x + 1) * tw].mean())
+               for y in range(_TILES_Y) for x in range(_TILES_X))
+
+
 def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,
                gap_sec: float) -> list[StateRun]:
     """
@@ -71,7 +87,7 @@ def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,
         if img is None:
             log.warning("크롭 읽기 실패(무시): %s", p)
             continue
-        if ref is None or float(np.abs(img - ref).mean()) > mae_th:
+        if ref is None or _diff(img, ref) > mae_th:
             groups.append([(idx, sec, p)])
             ref = img          # 기준 = 그룹 첫 이미지(갱신 안 함 — 드리프트 방지)
         else:
