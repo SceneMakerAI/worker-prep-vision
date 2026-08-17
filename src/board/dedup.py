@@ -39,28 +39,36 @@ class StateRun:
         return len(self.items)
 
 
+# 비교 해상도 — 높이 20 고정, 폭은 종횡비 비례(최소 32). 정사각형 강제 축소(32×20)는
+# TEAM 처럼 폭이 넓은 스트립에서 점수 숫자를 1~2px 로 뭉개 변화가 소실된다
+# (v200 실측: 5→6 점수 변화 미검출 → 한 그룹으로 뭉쳐 오답 23건).
+_FEAT_H = 20
+_TILE_W, _TILE_H = 8, 10
+
+
 def _feature(path: Path) -> np.ndarray | None:
-    """비교용 특징 — 그레이 32×20 축소 + 3×3 블러(검증된 조합, 변경 주의)."""
+    """비교용 특징 — 그레이 높이 20(폭 비례) 축소 + 3×3 블러. 좁은 크롭은 기존 32×20 동일."""
     g = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if g is None:
         return None
-    return cv2.GaussianBlur(cv2.resize(g, (32, 20)), (3, 3), 0).astype(np.float32)
-
-
-# 타일 분할(4×2) — 비교는 전역 평균이 아니라 '타일별 MAE 의 최대값'으로 한다.
-# 전역 평균은 TEAM 처럼 넓은 스트립에서 점수 숫자 한 자리 변화가 희석돼 임계를 못 넘는다
-# (v200 실측: TEAM 정답률 15% — 경기 전체가 3그룹으로 뭉개짐). 타일 최대값은 국소 변화를
-# 그대로 드러내고, 노이즈 여유(전역 ~1.0, 타일 최대 ~3)가 있어 임계 8 을 유지한다.
-_TILES_X, _TILES_Y = 4, 2
+    h, w = g.shape
+    nw = max(32, round(w * _FEAT_H / h))
+    return cv2.GaussianBlur(cv2.resize(g, (nw, _FEAT_H)), (3, 3), 0).astype(np.float32)
 
 
 def _diff(a: np.ndarray, b: np.ndarray) -> float:
-    """두 특징의 차이 — 타일별 MAE 중 최대값(국소 변화 비희석)."""
+    """두 특징의 차이 — 8×10px 고정 격자 타일별 MAE 중 최대값(국소 변화 비희석).
+
+    전역 평균은 넓은 스트립에서 국소(숫자 한 자리) 변화가 희석돼 임계를 못 넘는다.
+    타일 최대값은 노이즈 여유(전역 ~1.0, 타일 최대 ~3)가 있어 임계 8 을 그대로 쓴다.
+    크기가 다르면(크롭 박스 변경 등) 비교 불가 — 무한대로 보아 새 그룹으로 가른다.
+    """
+    if a.shape != b.shape:
+        return float("inf")
     d = np.abs(a - b)
     h, w = d.shape
-    th, tw = h // _TILES_Y, w // _TILES_X
-    return max(float(d[y * th:(y + 1) * th, x * tw:(x + 1) * tw].mean())
-               for y in range(_TILES_Y) for x in range(_TILES_X))
+    return max(float(d[y:y + _TILE_H, x:x + _TILE_W].mean())
+               for y in range(0, h, _TILE_H) for x in range(0, w, _TILE_W))
 
 
 def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,

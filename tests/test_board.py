@@ -66,6 +66,21 @@ def test_dedup_local_change(tmp_path):
     assert len({r.group_id for r in runs}) == 2, "국소 변화가 그룹 경계로 잡혀야 함"
 
 
+def test_dedup_wide_strip_digit(tmp_path):
+    """넓은 스트립(TEAM류)의 숫자 한 자리 변화 — 종횡비 유지 축소로 소실되지 않아야 한다."""
+    def strip(ts, digit_tone):
+        img = np.full((20, 200, 3), 30, np.uint8)          # 어두운 스트립
+        img[4:16, 90:100] = digit_tone                     # 가운데 '점수 숫자' 영역만 변화
+        noisy = np.clip(img.astype(int) + RNG.integers(-3, 4, img.shape), 0, 255).astype(np.uint8)
+        p = tmp_path / f"{ts:05d}.jpg"
+        cv2.imwrite(str(p), noisy)
+        return (ts, ts, p)
+
+    items = [strip(t, 220) for t in range(0, 11, 2)] + [strip(t, 120) for t in range(12, 23, 2)]
+    runs = dedup_runs(items, mae_th=8.0, min_cnt=2, gap_sec=4.0)
+    assert len({r.group_id for r in runs}) == 2, "스트립 내 숫자 변화가 그룹 경계로 잡혀야 함"
+
+
 def test_vote_samples(items):
     runs = dedup_runs(items, mae_th=8.0, min_cnt=2, gap_sec=4.0)
     gid = runs[0].group_id
