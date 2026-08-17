@@ -48,6 +48,24 @@ class Settings(BaseSettings):
     prep_jpg_quality: int = 2           # ffmpeg -q:v (1~31, 낮을수록 고화질)
     prep_concurrency: int = 4           # 프레임 추출 ffmpeg 동시 실행 수(CPU)
 
+    # --- 보드 분석: 입력(크롭)·시간축 그룹핑 ---
+    # 크롭은 앞단(스코어보드 검출 파이프라인)이 떨궈준다 — 이 워커는 읽기만 한다.
+    # 입력 계약: {vod_root}/{v_id}/crops/{kind}/{초:05d}.jpg
+    board_kinds: str = "base,count,etc,inning,out,team"   # 처리할 kind 목록(콤마 구분)
+    board_crop_interval: float = 2.0    # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
+    board_mae_th: float = 8.0           # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
+    board_min_cnt: int = 2              # 이 장수 미만 그룹 제거(전환 애니메이션·오탐 필터)
+    board_gap_factor: float = 2.0       # 크롭 공백 > interval×factor 면 구간 분리
+                                        # (보드 부재 구간을 상태 유지로 오인하지 않기 위함)
+
+    # --- 보드 분석: VLM 판독 (OpenAI 호환 chat/completions) ---
+    vlm_url: str                        # 베이스 URL — 필수(.env). 예: http://<vlm-host>:<port>
+    vlm_model: str                      # 모델 id — 필수(.env)
+    vlm_timeout: float = 90.0           # 호출 타임아웃(초)
+    vlm_max_tokens: int = 120
+    board_read_concurrency: int = 8     # VLM 동시 호출 수
+    board_vote_k: int = 1               # 그룹당 판독 표본 수(1=중간 1장, 3=첫/중간/끝 다수결)
+
     # --- DB (MariaDB) ---
     db_ip: str = "127.0.0.1"
     db_port: int = 3306
@@ -73,6 +91,20 @@ class Settings(BaseSettings):
     def seg_frame_dir(self, v_id: int, seg_id: int) -> Path:
         """세그먼트 프레임 디렉토리 — {frames_root}/{v_id}/seg{seg_id:05d} (agent-vision frame_paths 규칙)."""
         return Path(self.frames_root) / str(v_id) / f"seg{seg_id:05d}"
+
+    @property
+    def kinds(self) -> list[str]:
+        """보드 분석이 처리할 kind 목록 — board_kinds(콤마 구분)를 리스트로."""
+        return [k.strip() for k in self.board_kinds.split(",") if k.strip()]
+
+    @property
+    def gap_sec(self) -> float:
+        """보드 구간 분리 기준 공백(초) — 크롭 간격 × 계수. 초과 공백이면 보드 부재로 본다."""
+        return self.board_crop_interval * self.board_gap_factor
+
+    def crops_dir(self, v_id: int, kind: str) -> Path:
+        """크롭 입력 디렉토리 — {vod_root}/{v_id}/crops/{kind} (앞단 산출물, 읽기 전용)."""
+        return Path(self.vod_root) / str(v_id) / "crops" / kind
 
     def __str__(self) -> str:
         """설정 내용을 [key] = value 로 나열(디버깅·로깅용). 비밀(db_pw)은 마스킹."""

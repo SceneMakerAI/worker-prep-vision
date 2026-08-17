@@ -1,7 +1,9 @@
 # worker-prep-vision — SceneMaker 영상 전처리 워커
 
 원본 영상을 scenedetect 로 동적 분할하고 세그먼트별 대표 프레임을 사전추출해 t_segment 에
-사전등록하는 FastAPI 워커. 구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
+사전등록하는 FastAPI 워커. **보드 분석 도메인**(스코어보드 크롭 시간축 그룹핑 + VLM 판독
+→ t_board_state 타임라인)도 이 워커가 함께 서빙한다(`/api/v1/board/...`).
+구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
 
 ## 문서 안내 — 자세한 내용은 필요할 때 해당 문서를 읽을 것
 
@@ -18,10 +20,10 @@
 
 - **`src/` 가 import 루트**(`PYTHONPATH=src`, 비패키지 앱). import 는 `from prep...`·
   `from api...`·`from persistence...`·`from config import ...` — `from src...` 아님.
-- **계층 경계 준수**: HTTP=`api/`, 미디어 처리=`prep/`, DB=`persistence/`(통로 `db.py`,
-  쿼리 `*Repo`). 계층 침범 코드 금지.
-- 블로킹 작업(scenedetect·ffmpeg)은 반드시 `asyncio.to_thread` 로 오프로드 — 이벤트 루프를
-  막는 코드 금지.
+- **계층 경계 준수**: HTTP=`api/`, 전처리=`prep/`, 보드 분석=`board/`, DB=`persistence/`
+  (통로 `db.py`, 쿼리 `*Repo`). 계층 침범 코드 금지.
+- 블로킹 작업(scenedetect·ffmpeg·cv2 그룹핑·VLM HTTP)은 반드시 `asyncio.to_thread` 로
+  오프로드 — 이벤트 루프를 막는 코드 금지.
 - docstring 은 한국어 Summary/Args/Returns/Description. 린트 ruff(line-length 100).
 - **주석 위생**: 코드 되풀이 주석·날짜 스탬프 금지. 남기는 주석은 *왜*(설계 근거·함정)만.
 - 병렬 탐지 워커 함수는 spawn 으로 실행된다 — 모듈 최상위에 두고, detect 를 호출하는
@@ -32,8 +34,15 @@
 - **설정은 전부 `config.Settings`(.env) 경유 — 하드코딩 금지.** 배포별 값은 기본값 없이
   필수(fail-fast). 시간 관련 설정은 프레임 수가 아니라 **초 단위**로 통일한다.
 - **DB=SSOT**: 세그먼트 목록의 진실원천은 t_segment(파일시스템 아님). 이 워커는 t_segment
-  를 **생성만** 한다 — 분석 결과 write 금지(하류 몫).
+  를 **생성만** 한다 — 분석 결과 컬럼(summary·replay 등) write 금지(하류 몫). 보드 분석
+  결과는 **t_board_state 에만** 쓴다. t_video 상태 갱신은 prep 파이프라인 전용 —
+  board 는 t_video 를 읽기만 한다(선형 파이프라인 게이팅 오염 방지).
 - 원본 파일명은 API 요청(`file_name`)으로 받는다 — 설정·소스에 파일명 하드코딩 금지.
+- **보드 입력 계약**: `{VOD_ROOT}/{v_id}/crops/{kind}/{초:05d}.jpg` 는 앞단(스코어보드 검출
+  파이프라인)과의 계약 — board 는 읽기 전용이며 크롭을 생성·수정·삭제하지 않는다.
+- **검증된 상수 보호**: 보드 그룹핑 조합(MAE 임계 8·32×20 축소·3×3 블러·2장 미만 제거)과
+  판독 프롬프트 6종은 실경기 4편 대조로 검증됨 — 근거 없이 바꾸지 말 것(튜닝은 .env 로).
+  회귀 테스트 tests/test_dedup.py 가 집행 지점.
 - 산출 프레임 경로 규칙 `{frames_root}/{v_id}/seg{id:05d}/f{i:03d}.jpg` 은 하류(agent-vision)
   와의 계약 — 임의 변경 금지.
 
@@ -56,5 +65,6 @@
 uv sync && cp .env.example .env      # .env 채우기
 PYTHONPATH=src uv run python src/run.py
 # 헬스: /healthz /readyz · 전처리: POST /api/v1/prep/segment {"v_id":1010,"file_name":"source.mp4","force":true}
-# 린트: uv run ruff check src
+# 보드: POST /api/v1/board/analyze {"v_id":1010,"force":true}
+# 린트: uv run ruff check src · 테스트: uv run pytest tests/
 ```

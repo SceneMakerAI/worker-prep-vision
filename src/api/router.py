@@ -6,12 +6,13 @@ prefix 정책: 헬스 프로브(/healthz·/readyz)는 루트, 비즈니스 API �
 
 from fastapi import APIRouter
 
-from api import health, prep
+from api import board, health, prep
 
 api_router = APIRouter()
 
 # 비즈니스 API — /api/v1
 api_router.include_router(prep.router, prefix="/api/v1")
+api_router.include_router(board.router, prefix="/api/v1")
 
 # 인프라 프로브 — 루트
 api_router.include_router(health.router)

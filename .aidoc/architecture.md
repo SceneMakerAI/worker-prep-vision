@@ -13,15 +13,21 @@ src/
 ├─ api/              # HTTP 경계 — 검증·상태코드·에러 본문만. 도메인 로직 없음
 │  ├─ router.py      #   /api/v1 집계
 │  ├─ health.py      #   /healthz(생존) · /readyz(DB+ffmpeg, 미준비 503)
-│  └─ prep.py        #   POST /prep/segment(202) · GET /prep/segment/{v_id} (구경로 별칭 유지)
-├─ prep/             # 미디어 처리 — CPU 블로킹은 전부 asyncio.to_thread 로 오프로드
-│  ├─ detect.py      #   scenedetect 분할 + 정수 초 타일 후처리(+ 청크 병렬)
+│  ├─ prep.py        #   POST /prep/segment(202) · GET /prep/segment/{v_id} (구경로 별칭 유지)
+│  └─ board.py       #   POST /board/analyze(202) · GET /board/analyze/{v_id}
+├─ prep/             # 전처리 — CPU 블로킹은 전부 asyncio.to_thread 로 오프로드
+│  ├─ detect.py      #   scenedetect 분할 + 밀리초 스냅 타일 후처리(+ 청크 병렬)
 │  ├─ frames.py      #   ffmpeg 프레임 추출(스레드풀 병렬)
 │  └─ pipeline.py    #   오케스트레이션: 원본확인→분할→추출→등록→상태갱신
+├─ board/            # 보드 분석 — 크롭(앞단 산출물) → 상태 타임라인
+│  ├─ dedup.py       #   시간축 그룹핑(MAE 경계·잡음 필터·공백 구간 분리)
+│  ├─ reader.py      #   VLM 판독(kind별 프롬프트, 스레드풀 병렬, vote_k 다수결)
+│  └─ pipeline.py    #   오케스트레이션: 크롭확인→그룹핑→판독→t_board_state 등록
 └─ persistence/      # DB 계층 — 통로(db.py)와 쿼리(*Repo) 분리
    ├─ db.py          #   asyncmy 커넥션 풀 래퍼(도메인 모름)
-   ├─ videos.py      #   t_video 조회·상태 갱신
-   └─ segments.py    #   t_segment 사전등록·삭제·집계
+   ├─ videos.py      #   t_video 조회·상태 갱신(상태 갱신은 prep 전용)
+   ├─ segments.py    #   t_segment 사전등록·삭제·집계
+   └─ board_states.py#   t_board_state 등록·삭제·집계
 ```
 
 - import 는 `from prep...`·`from api...`·`from persistence...`·`from config import ...`
@@ -69,6 +75,12 @@ agent-vision 은 이 경로를 **읽기만** 한다.
   (실패 프레임이 있으면 계획 수보다 작을 수 있음).
 - 재요청 가드(409)·force 선행을 전제로 plain INSERT — PK 중복은 레이스/버그 신호이므로
   예외로 터뜨린다(삼키지 않음).
+- **t_board_state**: PK (v_id, kind, board_id). board 파이프라인이 생성 — 같은 보드 상태가
+  유지된 시간 구간 하나가 한 행(start/end TIME(3)·crop_cnt·value JSON). 크롭 공백으로
+  갈라진 구간은 별도 행 — "행 없는 시간대 = 보드 부재"가 하류의 시간 조인 신호.
+  t_video 상태는 갱신하지 않음(선형 파이프라인 소유). 스키마 초안 deploy/t_board_state.sql.
+- **board 입력 계약**: {vod_root}/{v_id}/crops/{kind}/{초:05d}.jpg — 앞단(스코어보드 검출
+  파이프라인)이 생성, 이 워커는 읽기 전용.
 
 ### 상태코드 (t_code)
 

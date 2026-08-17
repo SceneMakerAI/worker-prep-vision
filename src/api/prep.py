@@ -63,8 +63,7 @@ class PrepStatus(BaseModel):
 
 
 @router.post("/prep/segment", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted)
-@router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted,
-             deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
+@router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted, deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
 async def prep(
     req: PrepRequest,
     background: BackgroundTasks,
@@ -111,8 +110,10 @@ async def prep(
         )
 
     background.add_task(run_prep, db, settings, req.v_id, req.file_name, req.force)
-    log.info("전처리 접수: v_id=%s file=%s (force=%s, category=%s)",
-             req.v_id, req.file_name, req.force, req.category)
+    log.info(
+        "전처리 접수: v_id=%s file=%s (force=%s, category=%s)", 
+        req.v_id, req.file_name, req.force, req.category
+    )
     
     return PrepAccepted(
         v_id=req.v_id, accepted=True, source=str(settings.source_path(req.v_id, req.file_name))
