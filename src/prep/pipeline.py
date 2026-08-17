@@ -28,15 +28,18 @@ def get_prep_timings(v_id: int) -> dict[str, float] | None:
 
 
 async def run_prep(
-    db: Database, settings: Settings, v_id: int, file_name: str, force: bool
+    db: Database, settings: Settings, v_id: int, file_name: str, force: bool,
+    extract: bool = True
 ) -> dict:
     """
     Summary:
-        영상 1건(v_id)의 전처리 — 장면 분할 + 프레임 추출 + t_segment 사전등록.
+        영상 1건(v_id)의 전처리 — 장면 분할 + 프레임 추출(옵션) + t_segment 사전등록.
     Args:
         db (Database): 커넥션 풀. settings (Settings): 경로·분할·프레임 정책. v_id (int): 대상 영상.
         file_name (str): 원본 파일명(prep 요청으로 수신) — {vod_root}/{v_id}/ 아래.
         force (bool): 기존 세그먼트를 지우고 다시 준비.
+        extract (bool): False 면 프레임 추출을 건너뛰고 분할+등록만 수행 —
+            frame_cnt 는 NULL("안 뽑음"을 "뽑았는데 0장"과 구분). 구간만 빨리 확보하는 용도.
     Returns:
         dict: {v_id, segments, frames, failed, status} 집계.
     Description:
@@ -71,9 +74,13 @@ async def run_prep(
         await vrepo.set_status(v_id, VIDEO_STATUS_FAILED)
         return {"v_id": v_id, "segments": 0, "status": VIDEO_STATUS_FAILED, "error": "NO_WINDOWS"}
 
-    # 2) 프레임 추출(ffmpeg CPU, 스레드풀 병렬 → 오프로드)
+    # 2) 프레임 추출(ffmpeg CPU, 스레드풀 병렬 → 오프로드) — extract=False 면 건너뜀
     t1 = time.monotonic()
-    fstats = await asyncio.to_thread(extract_frames, source, windows, settings, v_id)
+    if extract:
+        fstats = await asyncio.to_thread(extract_frames, source, windows, settings, v_id)
+    else:
+        fstats = {"segments": len(windows), "frames": 0, "failed": 0, "per_seg": None}
+        log.info("프레임 추출 생략(extract_frames=false): v_id=%s, %d세그", v_id, len(windows))
     t_frames = time.monotonic() - t1
 
     # 3) t_segment 사전등록(force 면 기존 삭제 후)

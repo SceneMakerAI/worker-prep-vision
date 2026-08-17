@@ -30,10 +30,12 @@ def _error(code: str, message: str, **ctx) -> dict:
 
 
 class PrepRequest(BaseModel):
-    """전처리 요청 — v_id·원본 파일명(필수), force·category(옵션, 미지정 시 기본값)."""
+    """전처리 요청 — v_id·원본 파일명(필수), force·extract_frames·category(옵션)."""
     v_id: int
     file_name: str               # {VOD_ROOT}/{v_id}/ 바로 아래의 원본 파일명 (경로 아님)
     force: bool = False
+    extract_frames: bool = True  # false 면 분할+t_segment 등록만(프레임 jpg 미추출,
+                                 # frame_cnt=NULL — 구간만 빨리 확보하는 용도)
     category: str | None = None  # 추후 영상 종류별 분할 튜닝 프리셋용 — 현재는 접수 로그만 남김
 
     @field_validator("file_name")
@@ -109,10 +111,11 @@ async def prep(
             )
         )
 
-    background.add_task(run_prep, db, settings, req.v_id, req.file_name, req.force)
+    background.add_task(run_prep, db, settings, req.v_id, req.file_name, req.force,
+                        req.extract_frames)
     log.info(
-        "전처리 접수: v_id=%s file=%s (force=%s, category=%s)", 
-        req.v_id, req.file_name, req.force, req.category
+        "전처리 접수: v_id=%s file=%s (force=%s, frames=%s, category=%s)",
+        req.v_id, req.file_name, req.force, req.extract_frames, req.category
     )
     
     return PrepAccepted(

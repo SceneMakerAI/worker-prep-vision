@@ -61,6 +61,7 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep/segment \
 | `v_id` | int | ✓ | 대상 영상 id (t_video 에 존재해야 함) |
 | `file_name` | str | ✓ | `{VOD_ROOT}/{v_id}/` 아래 원본 파일명. **경로 구분자·상위참조 불가** |
 | `force` | bool | — | 기존 세그먼트 삭제 후 재전처리 (기본 `false`) |
+| `extract_frames` | bool | — | `false` 면 분할+등록만(프레임 jpg 미추출, `frame_cnt`=NULL). 구간만 빨리 확보 (기본 `true`) |
 | `category` | str\|null | — | 영상 종류별 분할 튜닝 프리셋용 예약 필드 (기본 `null`, 현재 미사용) |
 
 구경로 `POST /api/v1/prep` 는 호환용 별칭(deprecated) — 호출처 전환이 끝나면 제거 예정.
