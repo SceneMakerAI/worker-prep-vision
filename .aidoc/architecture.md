@@ -19,15 +19,20 @@ src/
 │  ├─ detect.py      #   scenedetect 분할 + 밀리초 스냅 타일 후처리(+ 청크 병렬)
 │  ├─ frames.py      #   ffmpeg 프레임 추출(스레드풀 병렬)
 │  └─ pipeline.py    #   오케스트레이션: 원본확인→분할→추출→등록→상태갱신
-├─ board/            # 보드 분석 — 크롭(앞단 산출물) → 상태 타임라인
-│  ├─ dedup.py       #   시간축 그룹핑(MAE 경계·잡음 필터·공백 구간 분리)
-│  ├─ reader.py      #   VLM 판독(kind별 프롬프트, 스레드풀 병렬, vote_k 다수결)
-│  └─ pipeline.py    #   오케스트레이션: 크롭확인→그룹핑→판독→t_board_state 등록
+├─ board/            # 전광판 판독 — 크롭(상류 산출물) → txt·is_changed
+│  ├─ prompts.py     #   kind별 판독 프롬프트(= txt 저장 규약, 레퍼런스 검증본)
+│  ├─ select.py      #   간격 샘플링(순수 함수, idx_sec 기준 greedy)
+│  ├─ dedup.py       #   시간축 그룹핑(MAE 경계·잡음 필터·공백 구간 분리) + 표본 선정
+│  ├─ reader.py      #   VLM 다수결 판독(스레드풀 병렬, 건별 격리)
+│  ├─ postprocess.py #   응답→저장값 변환(BASE 3줄 → '1루, 2루' 정규형)
+│  ├─ change.py      #   판독값 변화 검출(ETC 제외·TEAM 순서 정규화)
+│  └─ pipeline.py    #   오케스트레이션: 선정→그룹핑→판독→txt 전파→is_changed 마킹
 └─ persistence/      # DB 계층 — 통로(db.py)와 쿼리(*Repo) 분리
    ├─ db.py          #   asyncmy 커넥션 풀 래퍼(도메인 모름)
    ├─ videos.py      #   t_video 조회·상태 갱신(상태 갱신은 prep 전용)
    ├─ segments.py    #   t_segment 사전등록·삭제·집계
-   └─ board_states.py#   t_board_state 등록·삭제·집계
+   ├─ frames.py      #   t_frame_adv 대상 조회·is_changed 마킹
+   └─ details.py     #   t_frame_board_detail 판독대상 조회·txt 저장·시계열
 ```
 
 - import 는 `from prep...`·`from api...`·`from persistence...`·`from config import ...`
@@ -75,12 +80,14 @@ agent-vision 은 이 경로를 **읽기만** 한다.
   (실패 프레임이 있으면 계획 수보다 작을 수 있음).
 - 재요청 가드(409)·force 선행을 전제로 plain INSERT — PK 중복은 레이스/버그 신호이므로
   예외로 터뜨린다(삼키지 않음).
-- **t_board_state**: PK (v_id, kind, board_id). board 파이프라인이 생성 — 같은 보드 상태가
-  유지된 시간 구간 하나가 한 행(start/end TIME(3)·crop_cnt·value JSON). 크롭 공백으로
-  갈라진 구간은 별도 행 — "행 없는 시간대 = 보드 부재"가 하류의 시간 조인 신호.
-  t_video 상태는 갱신하지 않음(선형 파이프라인 소유). 스키마 초안 deploy/t_board_state.sql.
-- **board 입력 계약**: {vod_root}/{v_id}/crops/{kind}/{초:05d}.jpg — 앞단(스코어보드 검출
-  파이프라인)이 생성, 이 워커는 읽기 전용.
+- **t_frame_board_detail**: 행(검출 박스·kind·detect)은 상류 img_models 소유 — board
+  판독은 **txt 컬럼만 UPDATE** 한다(varchar(128), 프롬프트 규약 그대로 저장. BASE 만
+  '1루, 2루' 정규형). 실행 시작 시 reset_txt(재실행 안전 — 옛 값이 변화 비교에 섞임 방지).
+- **t_frame_adv**: normal·pitch·detect_major_obj 는 상류 소유 — board 판독은
+  **is_changed 만 UPDATE**. detect_major_obj 는 불리언이 아니라 검출 항목 '개수'(0~5) —
+  대상 조건은 `normal=0 AND detect_major_obj=5`.
+- **board 입력 계약**: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg —
+  상류(worker-img_models)가 간격 샘플과 1:1 로 생성, 이 워커는 읽기 전용.
 
 ### 상태코드 (t_code)
 

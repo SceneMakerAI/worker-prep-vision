@@ -10,8 +10,9 @@ POST /api/v1/prep/segment {v_id, file_name[, force, category]}  →  202 (즉시
                 → t_segment 사전등록 → t_video 상태 갱신
 
 POST /api/v1/board/analyze {v_id[, force]}  →  202 (즉시 접수)
-  └ background: 크롭 확인 → kind별 시간축 그룹핑(dedup) → 그룹 대표 VLM 판독
-                → t_board_state 상태 타임라인 등록 (t_video 는 건드리지 않음)
+  └ background: 대상 선정(t_frame_adv) → kind별 시간축 그룹핑(dedup)
+                → 그룹 표본 다수결 VLM 판독 → t_frame_board_detail.txt 전파 저장
+                → 변화 마킹(t_frame_adv.is_changed) (t_video 는 건드리지 않음)
 ```
 
 - **분할**: 고정 그리드가 아니라 콘텐츠 변화 기반 동적 경계. 밀리초 스냅, 최소/최대 길이
@@ -81,12 +82,13 @@ curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
 
 `status`: `1001` 전처리 입력 → `1002` 전처리 완료 / `-1` 실패(원본 없음·분할 결과 없음).
 
-### `POST /api/v1/board/analyze` — 보드 분석 접수
+### `POST /api/v1/board/analyze` — 전광판 판독 접수
 
-앞단(스코어보드 검출 파이프라인)이 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/crops/{kind}/
-{초:05d}.jpg`)을 시간축으로 그룹핑하고, 상태가 바뀐 그룹의 대표만 VLM 으로 판독해
-**t_board_state 에 상태 타임라인**을 등록한다(스키마 초안:
-[deploy/t_board_state.sql](deploy/t_board_state.sql)).
+상류(worker-img_models)가 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/crops/{kind 소문자}/
+{idx:05d}.jpg`)을 시간축으로 그룹핑하고, 그룹당 **시작/중간/끝 표본만 VLM 다수결 판독**해
+`t_frame_board_detail.txt` 에 그룹 전파 저장 + `t_frame_adv.is_changed` 를 마킹한다.
+전량 판독(레퍼런스 agent-vision3 read, v200 실측 19,368건·17.6분)의 판독량을 1/10
+수준으로 줄이는 것이 이 워커로의 이관 목적이다.
 
 ```bash
 curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/board/analyze \
@@ -97,22 +99,24 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/board/analyze \
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
 | `v_id` | int | ✓ | 대상 영상 id (t_video 에 존재해야 함) |
-| `force` | bool | — | 기존 보드 상태 삭제 후 재분석 (기본 `false`) |
+| `force` | bool | — | 기존 판독값(txt)이 있어도 재실행 (기본 `false`) |
 
 응답 `202`: `{"v_id": 1010, "accepted": true}`. 오류: 404 `VIDEO_NOT_FOUND` /
 409 `ALREADY_ANALYZED`(재실행은 `force=true`).
 
-- 판독 비용은 시간이 아니라 **화면이 몇 번 바뀌었는가**에 비례 — 2초 간격 크롭 수만 장이
-  kind별 수십~수백 그룹으로 줄고(97%↓), VLM 은 그룹당 표본만 읽는다.
-- 크롭 공백(스코어보드 부재)은 구간을 분리한다 — "행이 없는 시간대 = 보드 부재"가
-  하류(리플레이/광고 탐지)의 시간 조인 신호.
+- **선행 조건**: img_models 검출(t_frame_adv·t_frame_board_detail 행)과 크롭 파일.
+  대상 = `normal=0 AND detect_major_obj=5` 프레임을 간격 샘플링 후 `detect=1` 항목만.
+- **판독 비용은 시간이 아니라 "화면이 몇 번 바뀌었는가"에 비례** — 유사 크롭을 묶고
+  그룹당 표본 3장(BOARD_VOTE_K)만 읽어 다수결, 값은 구성원 전 행에 전파.
+- 판독 결과 txt 는 프롬프트 규약 그대로(`9회초`·`3-2`·`1`·`KIA 8: 삼성 2`,
+  BASE 만 `1루, 2루` 정규형) — 하류(agent-vision board 단계)의 입력 계약.
 - t_video 상태는 갱신하지 않는다(전처리·STT 선형 파이프라인과 독립인 병렬 브랜치).
 
-### `GET /api/v1/board/analyze/{v_id}` — 보드 분석 상태
+### `GET /api/v1/board/analyze/{v_id}` — 판독 상태
 
 ```bash
 curl http://127.0.0.1:<APP_PORT>/api/v1/board/analyze/1010
-# {"v_id": 1010, "states": 612, "by_kind": {"inning": 19, ...}, "last_result": {...}}
+# {"v_id": 1010, "txt_rows": 20037, "changed": 328, "last_result": {...}}
 ```
 
 ## 설정 (.env)

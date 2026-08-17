@@ -1,8 +1,9 @@
 # worker-prep-vision — SceneMaker 영상 전처리 워커
 
 원본 영상을 scenedetect 로 동적 분할하고 세그먼트별 대표 프레임을 사전추출해 t_segment 에
-사전등록하는 FastAPI 워커. **보드 분석 도메인**(스코어보드 크롭 시간축 그룹핑 + VLM 판독
-→ t_board_state 타임라인)도 이 워커가 함께 서빙한다(`/api/v1/board/...`).
+사전등록하는 FastAPI 워커. **전광판 판독 도메인**(크롭 시간축 그룹핑 + 표본 다수결 VLM 판독
+→ t_frame_board_detail.txt·t_frame_adv.is_changed)도 이 워커가 서빙한다(`/api/v1/board/...`
+— agent-vision3 read 스테이지에서 이관, 원조는 poc-vision-flow).
 구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
 
 ## 문서 안내 — 자세한 내용은 필요할 때 해당 문서를 읽을 것
@@ -34,15 +35,18 @@
 - **설정은 전부 `config.Settings`(.env) 경유 — 하드코딩 금지.** 배포별 값은 기본값 없이
   필수(fail-fast). 시간 관련 설정은 프레임 수가 아니라 **초 단위**로 통일한다.
 - **DB=SSOT**: 세그먼트 목록의 진실원천은 t_segment(파일시스템 아님). 이 워커는 t_segment
-  를 **생성만** 한다 — 분석 결과 컬럼(summary·replay 등) write 금지(하류 몫). 보드 분석
-  결과는 **t_board_state 에만** 쓴다. t_video 상태 갱신은 prep 파이프라인 전용 —
-  board 는 t_video 를 읽기만 한다(선형 파이프라인 게이팅 오염 방지).
+  를 **생성만** 한다 — 분석 결과 컬럼(summary·replay 등) write 금지(하류 몫). 전광판 판독은
+  상류 소유 행에서 **t_frame_board_detail.txt 와 t_frame_adv.is_changed 만 UPDATE** 한다.
+  t_video 상태 갱신은 prep 파이프라인 전용 — board 는 t_video 를 읽기만 한다(선형
+  파이프라인 게이팅 오염 방지).
 - 원본 파일명은 API 요청(`file_name`)으로 받는다 — 설정·소스에 파일명 하드코딩 금지.
-- **보드 입력 계약**: `{VOD_ROOT}/{v_id}/crops/{kind}/{초:05d}.jpg` 는 앞단(스코어보드 검출
-  파이프라인)과의 계약 — board 는 읽기 전용이며 크롭을 생성·수정·삭제하지 않는다.
-- **검증된 상수 보호**: 보드 그룹핑 조합(MAE 임계 8·32×20 축소·3×3 블러·2장 미만 제거)과
-  판독 프롬프트 6종은 실경기 4편 대조로 검증됨 — 근거 없이 바꾸지 말 것(튜닝은 .env 로).
-  회귀 테스트 tests/test_dedup.py 가 집행 지점.
+- **판독 입력 계약**: `{VOD_ROOT}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg` 는 상류
+  (worker-img_models)와의 계약(간격 샘플과 1:1) — board 는 읽기 전용이며 크롭을
+  생성·수정·삭제하지 않는다.
+- **검증된 상수 보호**: 그룹핑 조합(MAE 임계 8·32×20 축소·3×3 블러·2장 미만 제거)은 실경기
+  4편 크롭 8.2만 장 대조, 판독 프롬프트 6종(board/prompts.py)은 poc-vision-flow
+  eval/truth.tsv 전수 채점으로 검증됨 — 근거 없이 바꾸지 말 것(튜닝은 .env 로).
+  **프롬프트가 곧 txt 저장 규약**이다. 회귀 테스트 tests/test_board.py 가 집행 지점.
 - 산출 프레임 경로 규칙 `{frames_root}/{v_id}/seg{id:05d}/f{i:03d}.jpg` 은 하류(agent-vision)
   와의 계약 — 임의 변경 금지.
 

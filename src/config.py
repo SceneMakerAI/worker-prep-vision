@@ -48,10 +48,10 @@ class Settings(BaseSettings):
     prep_jpg_quality: int = 2           # ffmpeg -q:v (1~31, 낮을수록 고화질)
     prep_concurrency: int = 4           # 프레임 추출 ffmpeg 동시 실행 수(CPU)
 
-    # --- 보드 분석: 입력(크롭)·시간축 그룹핑 ---
-    # 크롭은 앞단(스코어보드 검출 파이프라인)이 떨궈준다 — 이 워커는 읽기만 한다.
-    # 입력 계약: {vod_root}/{v_id}/crops/{kind}/{초:05d}.jpg
-    board_kinds: str = "base,count,etc,inning,out,team"   # 처리할 kind 목록(콤마 구분)
+    # --- 전광판 판독: 입력(크롭)·시간축 그룹핑 ---
+    # 크롭은 상류(worker-img_models)가 떨궈준다 — 이 워커는 읽기만 한다.
+    # 입력 계약: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg
+    # 판독할 kind 는 설정이 아니라 DB(t_frame_board_detail 의 detect=1 행)가 정한다.
     board_crop_interval: float = 2.0    # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
     board_mae_th: float = 8.0           # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
     board_min_cnt: int = 2              # 이 장수 미만 그룹 제거(전환 애니메이션·오탐 필터)
@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     vlm_timeout: float = 90.0           # 호출 타임아웃(초)
     vlm_max_tokens: int = 120
     board_read_concurrency: int = 8     # VLM 동시 호출 수
-    board_vote_k: int = 1               # 그룹당 판독 표본 수(1=중간 1장, 3=첫/중간/끝 다수결)
+    board_vote_k: int = 3               # 그룹당 판독 표본 수(3=시작/중간/끝 다수결 — 이관 핵심, 1=중간 1장)
 
     # --- DB (MariaDB) ---
     db_ip: str = "127.0.0.1"
@@ -91,11 +91,6 @@ class Settings(BaseSettings):
     def seg_frame_dir(self, v_id: int, seg_id: int) -> Path:
         """세그먼트 프레임 디렉토리 — {frames_root}/{v_id}/seg{seg_id:05d} (agent-vision frame_paths 규칙)."""
         return Path(self.frames_root) / str(v_id) / f"seg{seg_id:05d}"
-
-    @property
-    def kinds(self) -> list[str]:
-        """보드 분석이 처리할 kind 목록 — board_kinds(콤마 구분)를 리스트로."""
-        return [k.strip() for k in self.board_kinds.split(",") if k.strip()]
 
     @property
     def gap_sec(self) -> float:
