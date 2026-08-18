@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # --- 전광판 판독: 입력(크롭)·시간축 그룹핑 ---
     # 크롭은 상류(worker-img_models)가 떨궈준다 — 이 워커는 읽기만 한다.
-    # 입력 계약: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg
+    # 입력 계약: {vod_root}/{v_id}/img_models/{kind 소문자}/{idx:05d}.jpg
     # 판독할 kind 는 설정이 아니라 DB(t_frame_baseball_board_detail 의 detect=1 행)가 정한다.
     board_crop_interval: float = 2.0    # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
     board_mae_th: float = 8.0           # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
@@ -98,8 +98,8 @@ class Settings(BaseSettings):
         return self.board_crop_interval * self.board_gap_factor
 
     def crops_dir(self, v_id: int, kind: str) -> Path:
-        """크롭 입력 디렉토리 — {vod_root}/{v_id}/crops/{kind} (앞단 산출물, 읽기 전용)."""
-        return Path(self.vod_root) / str(v_id) / "crops" / kind
+        """크롭 입력 디렉토리 — {vod_root}/{v_id}/img_models/{kind} (앞단 산출물, 읽기 전용)."""
+        return Path(self.vod_root) / str(v_id) / "img_models" / kind
 
     def __str__(self) -> str:
         """설정 내용을 [key] = value 로 나열(디버깅·로깅용). 비밀(db_pw)은 마스킹."""

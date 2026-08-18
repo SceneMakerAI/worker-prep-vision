@@ -32,7 +32,7 @@ def get_board_result(v_id: int) -> dict | None:
 
 
 def _crop_path(settings: Settings, v_id: int, kind: str, idx: int) -> Path:
-    """크롭 파일 경로 — {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg (상류 계약)."""
+    """크롭 파일 경로 — {vod_root}/{v_id}/img_models/{kind 소문자}/{idx:05d}.jpg (상류 계약)."""
     return settings.crops_dir(v_id, kind.lower()) / f"{idx:05d}.jpg"
 
 

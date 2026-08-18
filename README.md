@@ -85,7 +85,7 @@ curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
 
 ### `POST /api/v1/board/analyze` — 전광판 판독 접수
 
-상류(worker-img_models)가 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/crops/{kind 소문자}/
+상류(worker-img_models)가 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/img_models/{kind 소문자}/
 {idx:05d}.jpg`)을 시간축으로 그룹핑하고, 그룹당 **시작/중간/끝 표본만 VLM 다수결 판독**해
 `t_frame_baseball_board_detail.txt` 에 그룹 전파 저장 + `t_frame_baseball.is_changed` 를 마킹한다.
 전량 판독(레퍼런스 agent-vision3 read, v200 실측 19,368건·17.6분)의 판독량을 1/10

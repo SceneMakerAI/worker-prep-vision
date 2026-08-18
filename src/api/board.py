@@ -83,9 +83,11 @@ async def analyze(
         log.warning("이미 판독됨(force 필요): v_id=%s, txt %d행", req.v_id, existing)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=_error(ERR_ALREADY_ANALYZED,
-                          "이미 판독된 영상입니다. 다시 하려면 force=true.",
-                          v_id=req.v_id, txt_rows=existing),
+            detail=_error(
+                ERR_ALREADY_ANALYZED, 
+                "이미 판독된 영상입니다. 다시 하려면 force=true.", 
+                v_id=req.v_id, txt_rows=existing
+            ),
         )
 
     background.add_task(run_analyze, db, settings, req.v_id, req.force)

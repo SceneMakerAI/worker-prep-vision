@@ -86,7 +86,7 @@ agent-vision 은 이 경로를 **읽기만** 한다.
 - **t_frame_baseball**: normal·pitch·detect_major_obj 는 상류 소유 — board 판독은
   **is_changed 만 UPDATE**. detect_major_obj 는 불리언이 아니라 검출 항목 '개수'(0~5) —
   대상 조건은 `normal=0 AND detect_major_obj=5`.
-- **board 입력 계약**: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg —
+- **board 입력 계약**: {vod_root}/{v_id}/img_models/{kind 소문자}/{idx:05d}.jpg —
   상류(worker-img_models)가 간격 샘플과 1:1 로 생성, 이 워커는 읽기 전용.
 
 ### 상태코드 (t_code)
