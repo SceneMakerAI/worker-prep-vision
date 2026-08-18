@@ -10,9 +10,9 @@ POST /api/v1/prep/segment {v_id, file_name[, force, category]}  →  202 (즉시
                 → t_segment 사전등록 → t_video 상태 갱신
 
 POST /api/v1/board/analyze {v_id[, force]}  →  202 (즉시 접수)
-  └ background: 대상 선정(t_frame_adv) → kind별 시간축 그룹핑(dedup)
-                → 그룹 표본 다수결 VLM 판독 → t_frame_board_detail.txt 전파 저장
-                → 변화 마킹(t_frame_adv.is_changed) (t_video 는 건드리지 않음)
+  └ background: 대상 선정(t_frame_baseball) → kind별 시간축 그룹핑(dedup)
+                → 그룹 표본 다수결 VLM 판독 → t_frame_baseball_board_detail.txt 전파 저장
+                → 변화 마킹(t_frame_baseball.is_changed) (t_video 는 건드리지 않음)
 ```
 
 - **분할**: 고정 그리드가 아니라 콘텐츠 변화 기반 동적 경계. 밀리초 스냅, 최소/최대 길이
@@ -87,7 +87,7 @@ curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
 
 상류(worker-img_models)가 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/crops/{kind 소문자}/
 {idx:05d}.jpg`)을 시간축으로 그룹핑하고, 그룹당 **시작/중간/끝 표본만 VLM 다수결 판독**해
-`t_frame_board_detail.txt` 에 그룹 전파 저장 + `t_frame_adv.is_changed` 를 마킹한다.
+`t_frame_baseball_board_detail.txt` 에 그룹 전파 저장 + `t_frame_baseball.is_changed` 를 마킹한다.
 전량 판독(레퍼런스 agent-vision3 read, v200 실측 19,368건·17.6분)의 판독량을 1/10
 수준으로 줄이는 것이 이 워커로의 이관 목적이다.
 
@@ -105,7 +105,7 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/board/analyze \
 응답 `202`: `{"v_id": 1010, "accepted": true}`. 오류: 404 `VIDEO_NOT_FOUND` /
 409 `ALREADY_ANALYZED`(재실행은 `force=true`).
 
-- **선행 조건**: img_models 검출(t_frame_adv·t_frame_board_detail 행)과 크롭 파일.
+- **선행 조건**: img_models 검출(t_frame_baseball·t_frame_baseball_board_detail 행)과 크롭 파일.
   대상 = `normal=0 AND detect_major_obj=5` 프레임을 간격 샘플링 후 `detect=1` 항목만.
 - **판독 비용은 시간이 아니라 "화면이 몇 번 바뀌었는가"에 비례** — 유사 크롭을 묶고
   그룹당 표본 3장(BOARD_VOTE_K)만 읽어 다수결, 값은 구성원 전 행에 전파.

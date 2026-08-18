@@ -1,6 +1,6 @@
-"""board 오케스트레이션 — 전광판 크롭을 판독해 t_frame_board_detail.txt 를 채운다.
+"""board 오케스트레이션 — 전광판 크롭을 판독해 t_frame_baseball_board_detail.txt 를 채운다.
 
-흐름: 대상 선정(t_frame_adv → 간격 샘플 → detect=1 항목) → kind별 시간축 그룹핑(dedup)
+흐름: 대상 선정(t_frame_baseball → 간격 샘플 → detect=1 항목) → kind별 시간축 그룹핑(dedup)
       → 그룹 표본 다수결 판독(VLM) → txt 그룹 전파 저장 → 변화 마킹(is_changed).
 전량 판독(agent-vision3 read 레퍼런스) 대비 판독량을 1/10 수준으로 줄이는 것이 이관 목적.
 그룹핑(cv2)·판독(HTTP×N)은 블로킹이라 asyncio.to_thread 로 감싼다.
@@ -73,7 +73,7 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
     """
     frames, details = FrameRepo(db), BoardDetailRepo(db)
 
-    # 1) 대상 선정 — t_frame_adv 조건 → 간격 샘플 → detect=1 (idx, kind)
+    # 1) 대상 선정 — t_frame_baseball 조건 → 간격 샘플 → detect=1 (idx, kind)
     t0 = time.monotonic()
     targets = await frames.fetch_targets(v_id)
     if not targets:

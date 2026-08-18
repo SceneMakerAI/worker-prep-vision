@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # --- 전광판 판독: 입력(크롭)·시간축 그룹핑 ---
     # 크롭은 상류(worker-img_models)가 떨궈준다 — 이 워커는 읽기만 한다.
     # 입력 계약: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg
-    # 판독할 kind 는 설정이 아니라 DB(t_frame_board_detail 의 detect=1 행)가 정한다.
+    # 판독할 kind 는 설정이 아니라 DB(t_frame_baseball_board_detail 의 detect=1 행)가 정한다.
     board_crop_interval: float = 2.0    # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
     board_mae_th: float = 8.0           # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
     board_min_cnt: int = 2              # 이 장수 미만 그룹 제거(전환 애니메이션·오탐 필터)

@@ -35,13 +35,13 @@ class VideoRepo:
         Args:
             v_id (int): 대상 영상 id.
         Returns:
-            dict | None: 영상 행(v_id, cate_id, name, segment_sec, dir, status_code)
+            dict | None: 영상 행(v_id, cate_id, name, dir, status_code)
                 또는 없으면 None.
         Description:
             - 영상 길이는 t_video 에 없다 — 실제 경계는 scenedetect 가 원본에서 직접 정한다.
         """
         sql = (
-            "SELECT v_id, cate_id, name, segment_sec, dir, status_code "
+            "SELECT v_id, cate_id, name, dir, status_code "
             "FROM t_video WHERE v_id = %s"
         )
         async with self._db.acquire() as conn:

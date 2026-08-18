@@ -1,7 +1,7 @@
 """전광판 판독 라우터 — 영상(v_id) 단위 크롭 그룹핑 + VLM 다수결 판독 + txt·is_changed 갱신.
 
 POST /board/analyze {v_id[, force]} → 즉시 202, 실제 작업(cv2·VLM)은 백그라운드.
-GET /board/analyze/{v_id} 로 상태. 결과의 진실원천은 t_frame_board_detail.txt(DB)다.
+GET /board/analyze/{v_id} 로 상태. 결과의 진실원천은 t_frame_baseball_board_detail.txt(DB)다.
 크롭·검출 선행 여부 등 물리 검증은 백그라운드에서 한다(prep 관례).
 """
 

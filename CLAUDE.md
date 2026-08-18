@@ -2,7 +2,7 @@
 
 원본 영상을 scenedetect 로 동적 분할하고 세그먼트별 대표 프레임을 사전추출해 t_segment 에
 사전등록하는 FastAPI 워커. **전광판 판독 도메인**(크롭 시간축 그룹핑 + 표본 다수결 VLM 판독
-→ t_frame_board_detail.txt·t_frame_adv.is_changed)도 이 워커가 서빙한다(`/api/v1/board/...`
+→ t_frame_baseball_board_detail.txt·t_frame_baseball.is_changed)도 이 워커가 서빙한다(`/api/v1/board/...`
 — agent-vision3 read 스테이지에서 이관, 원조는 poc-vision-flow).
 구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
 
@@ -36,7 +36,7 @@
   필수(fail-fast). 시간 관련 설정은 프레임 수가 아니라 **초 단위**로 통일한다.
 - **DB=SSOT**: 세그먼트 목록의 진실원천은 t_segment(파일시스템 아님). 이 워커는 t_segment
   를 **생성만** 한다 — 분석 결과 컬럼(summary·replay 등) write 금지(하류 몫). 전광판 판독은
-  상류 소유 행에서 **t_frame_board_detail.txt 와 t_frame_adv.is_changed 만 UPDATE** 한다.
+  상류 소유 행에서 **t_frame_baseball_board_detail.txt 와 t_frame_baseball.is_changed 만 UPDATE** 한다.
   t_video 상태 갱신은 prep 파이프라인 전용 — board 는 t_video 를 읽기만 한다(선형
   파이프라인 게이팅 오염 방지).
 - 원본 파일명은 API 요청(`file_name`)으로 받는다 — 설정·소스에 파일명 하드코딩 금지.

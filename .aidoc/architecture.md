@@ -31,8 +31,8 @@ src/
    ├─ db.py          #   asyncmy 커넥션 풀 래퍼(도메인 모름)
    ├─ videos.py      #   t_video 조회·상태 갱신(상태 갱신은 prep 전용)
    ├─ segments.py    #   t_segment 사전등록·삭제·집계
-   ├─ frames.py      #   t_frame_adv 대상 조회·is_changed 마킹
-   └─ details.py     #   t_frame_board_detail 판독대상 조회·txt 저장·시계열
+   ├─ frames.py      #   t_frame_baseball 대상 조회·is_changed 마킹
+   └─ details.py     #   t_frame_baseball_board_detail 판독대상 조회·txt 저장·시계열
 ```
 
 - import 는 `from prep...`·`from api...`·`from persistence...`·`from config import ...`
@@ -67,7 +67,7 @@ agent-vision 은 이 경로를 **읽기만** 한다.
 
 ### DB (SSOT)
 
-- **t_video**: `v_id, cate_id, name, segment_sec, dir, status_code` — duration 컬럼 없음
+- **t_video**: `v_id, cate_id, name, dir, status_code` — duration 컬럼 없음
   (영상 길이는 scenedetect 가 원본에서 직접 읽음).
 - **t_segment**: PK (v_id, seg_id). 이 워커는 `start_time/end_time(SEC_TO_TIME),
   frame_cnt, status_code=2001, status_reason='PENDING'` 으로 **생성만** 한다. 분석 결과
@@ -80,10 +80,10 @@ agent-vision 은 이 경로를 **읽기만** 한다.
   (실패 프레임이 있으면 계획 수보다 작을 수 있음).
 - 재요청 가드(409)·force 선행을 전제로 plain INSERT — PK 중복은 레이스/버그 신호이므로
   예외로 터뜨린다(삼키지 않음).
-- **t_frame_board_detail**: 행(검출 박스·kind·detect)은 상류 img_models 소유 — board
+- **t_frame_baseball_board_detail**: 행(검출 박스·kind·detect)은 상류 img_models 소유 — board
   판독은 **txt 컬럼만 UPDATE** 한다(varchar(128), 프롬프트 규약 그대로 저장. BASE 만
   '1루, 2루' 정규형). 실행 시작 시 reset_txt(재실행 안전 — 옛 값이 변화 비교에 섞임 방지).
-- **t_frame_adv**: normal·pitch·detect_major_obj 는 상류 소유 — board 판독은
+- **t_frame_baseball**: normal·pitch·detect_major_obj 는 상류 소유 — board 판독은
   **is_changed 만 UPDATE**. detect_major_obj 는 불리언이 아니라 검출 항목 '개수'(0~5) —
   대상 조건은 `normal=0 AND detect_major_obj=5`.
 - **board 입력 계약**: {vod_root}/{v_id}/crops/{kind 소문자}/{idx:05d}.jpg —

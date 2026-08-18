@@ -1,4 +1,4 @@
-"""전광판 판독값 repository — t_frame_board_detail 접근 (board 판독 산출·하류 board 단계 입력).
+"""전광판 판독값 repository — t_frame_baseball_board_detail 접근 (board 판독 산출·하류 board 단계 입력).
 
 행 자체(검출 박스·kind)는 상류 img_models 가 만들고, 이 워커는 **txt 컬럼만 UPDATE** 한다.
 (agent-vision3 db/details 이식 — 판독 이관에 따라 저장 주체가 이 워커로 옮겨온 것.)
@@ -16,7 +16,7 @@ CHANGE_EXCLUDE_KINDS = ("ETC",)
 
 
 class BoardDetailRepo:
-    """t_frame_board_detail 접근 객체 — 판독 대상 조회·txt 저장·시계열 조회."""
+    """t_frame_baseball_board_detail 접근 객체 — 판독 대상 조회·txt 저장·시계열 조회."""
 
     def __init__(self, db: Database) -> None:
         self._db = db
@@ -37,7 +37,7 @@ class BoardDetailRepo:
         if not idxs:
             return []
         ph = ",".join(["%s"] * len(idxs))
-        sql = (f"SELECT idx, kind FROM t_frame_board_detail "
+        sql = (f"SELECT idx, kind FROM t_frame_baseball_board_detail "
                f"WHERE v_id = %s AND detect = 1 AND idx IN ({ph}) ORDER BY idx, kind")
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
@@ -61,7 +61,7 @@ class BoardDetailRepo:
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE t_frame_board_detail SET txt = '' WHERE v_id = %s", (v_id,))
+                    "UPDATE t_frame_baseball_board_detail SET txt = '' WHERE v_id = %s", (v_id,))
                 n = cur.rowcount
         log.info("txt 초기화: v_id=%s, %d행", v_id, n)
         return n
@@ -82,7 +82,7 @@ class BoardDetailRepo:
         if not idxs:
             return 0
         ph = ",".join(["%s"] * len(idxs))
-        sql = (f"UPDATE t_frame_board_detail SET txt = %s "
+        sql = (f"UPDATE t_frame_baseball_board_detail SET txt = %s "
                f"WHERE v_id = %s AND kind = %s AND idx IN ({ph})")
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
@@ -101,7 +101,7 @@ class BoardDetailRepo:
             list[tuple[str, int, str]]: txt 가 빈 행은 제외(가짜 변화 방지).
         """
         ph = ",".join(["%s"] * len(exclude))
-        sql = (f"SELECT kind, idx, txt FROM t_frame_board_detail "
+        sql = (f"SELECT kind, idx, txt FROM t_frame_baseball_board_detail "
                f"WHERE v_id = %s AND txt <> '' AND kind NOT IN ({ph}) "
                f"ORDER BY kind, idx")
         async with self._db.acquire() as conn:
@@ -114,7 +114,7 @@ class BoardDetailRepo:
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "SELECT COUNT(*) FROM t_frame_board_detail WHERE v_id = %s AND txt <> ''",
+                    "SELECT COUNT(*) FROM t_frame_baseball_board_detail WHERE v_id = %s AND txt <> ''",
                     (v_id,))
                 row = await cur.fetchone()
         return int(row[0]) if row else 0

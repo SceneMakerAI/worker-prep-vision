@@ -1,6 +1,6 @@
 """kind별 판독 프롬프트 — agent-vision3 read(← poc-vision-flow) 검증 완료본 이식.
 
-**프롬프트가 곧 DB 규약이다**: 응답이 (BASE 제외) 후처리 없이 t_frame_board_detail.txt 에
+**프롬프트가 곧 DB 규약이다**: 응답이 (BASE 제외) 후처리 없이 t_frame_baseball_board_detail.txt 에
 원문 그대로 저장된다. txt 는 varchar(128) — 응답이 그 안에 들어와야 한다.
 문구는 원본 실측(A/B) 근거가 걸려 있으므로 임의 수정 금지 — 수정 시 poc-vision-flow 의
 eval/truth.tsv 로 회귀 채점할 것. 판정 규칙에 색상명 하드코딩 금지(방송사마다 스타일 상이).
