@@ -11,7 +11,7 @@ src/
 ├─ config.py         # Settings(.env) — 모든 설정의 단일 관문. 하드코딩 금지
 ├─ log.py            # 로깅 — stdout + (LOG_PATH 시) 회전 파일 10MB×5
 ├─ api/              # HTTP 경계 — 검증·상태코드·에러 본문만. 도메인 로직 없음
-│  ├─ router.py      #   /api/v1 집계
+│  ├─ router.py      #   라우터 집계 (접두사 없음)
 │  ├─ health.py      #   /healthz(생존) · /readyz(DB+ffmpeg, 미준비 503)
 │  ├─ prep.py        #   POST /prep/segment(202) · GET /prep/segment/{v_id} (구경로 별칭 유지)
 │  └─ board.py       #   POST /board/analyze(202) · GET /board/analyze/{v_id}

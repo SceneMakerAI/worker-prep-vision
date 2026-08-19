@@ -5,11 +5,11 @@ SceneMaker **영상 전처리 워커** — 원본 영상을 scenedetect 로 **�
 후속 분석(agent-vision)이 곧바로 돌 수 있는 상태로 영상(v_id)을 준비한다.
 
 ```
-POST /api/v1/prep/segment {v_id, file_name[, force, category]}  →  202 (즉시 접수)
+POST /prep/segment {v_id, file_name[, force, category]}  →  202 (즉시 접수)
   └ background: 원본 확인 → scenedetect 동적 분할 → 프레임 추출(ffmpeg)
                 → t_segment 사전등록 → t_video 상태 갱신
 
-POST /api/v1/board/analyze {v_id[, force]}  →  202 (즉시 접수)
+POST /board/analyze {v_id[, force]}  →  202 (즉시 접수)
   └ background: 대상 선정(t_frame_baseball) → kind별 시간축 그룹핑(dedup)
                 → 그룹 표본 다수결 VLM 판독 → t_frame_baseball_board_detail.txt 전파 저장
                 → 변화 마킹(t_frame_baseball.is_changed) (t_video 는 건드리지 않음)
@@ -48,10 +48,10 @@ curl http://127.0.0.1:<APP_PORT>/readyz    # DB + ffmpeg 준비 (미준비 시 5
 
 ## API
 
-### `POST /api/v1/prep/segment` — 전처리 접수
+### `POST /prep/segment` — 전처리 접수
 
 ```bash
-curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep/segment \
+curl -X POST http://127.0.0.1:<APP_PORT>/prep/segment \
   -H "Content-Type: application/json" \
   -d '{"v_id": 1010, "file_name": "source.mp4"}'
 ```
@@ -64,7 +64,7 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep/segment \
 | `extract_frames` | bool | — | `false` 면 분할+등록만(프레임 jpg 미추출, `frame_cnt`=NULL). 구간만 빨리 확보 (기본 `true`) |
 | `category` | str\|null | — | 영상 종류별 분할 튜닝 프리셋용 예약 필드 (기본 `null`, 현재 미사용) |
 
-구경로 `POST /api/v1/prep` 는 호환용 별칭(deprecated) — 호출처 전환이 끝나면 제거 예정.
+구경로 `POST /prep` 는 호환용 별칭(deprecated) — 호출처 전환이 끝나면 제거 예정.
 
 응답 `202`: `{"v_id": 1010, "accepted": true, "source": "<원본 경로>"}` — 실제 작업은 백그라운드.
 
@@ -74,16 +74,16 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/prep/segment \
 | 409 | `ALREADY_PREPPED` | 이미 세그먼트 존재 — 재실행은 `force=true` |
 | 422 | — | `file_name` 검증 실패(경로 탈출 시도 등) |
 
-### `GET /api/v1/prep/segment/{v_id}` — 진행 상태
+### `GET /prep/segment/{v_id}` — 진행 상태
 
 ```bash
-curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
+curl http://127.0.0.1:<APP_PORT>/prep/segment/1010
 # {"v_id": 1010, "status": 1002, "segments": 1678}
 ```
 
 `status`: `1001` 전처리 입력 → `1002` 전처리 완료 / `-1` 실패(원본 없음·분할 결과 없음).
 
-### `POST /api/v1/board/analyze` — 전광판 판독 접수
+### `POST /board/analyze` — 전광판 판독 접수
 
 상류(worker-img_models)가 떨궈둔 kind별 크롭(`{VOD_ROOT}/{v_id}/img_models/{kind 소문자}/
 {idx:05d}.jpg`)을 시간축으로 그룹핑하고, 그룹당 **시작/중간/끝 표본만 VLM 다수결 판독**해
@@ -92,7 +92,7 @@ curl http://127.0.0.1:<APP_PORT>/api/v1/prep/segment/1010
 수준으로 줄이는 것이 이 워커로의 이관 목적이다.
 
 ```bash
-curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/board/analyze \
+curl -X POST http://127.0.0.1:<APP_PORT>/board/analyze \
   -H "Content-Type: application/json" \
   -d '{"v_id": 1010}'
 ```
@@ -113,10 +113,10 @@ curl -X POST http://127.0.0.1:<APP_PORT>/api/v1/board/analyze \
   BASE 만 `1루, 2루` 정규형) — 하류(agent-vision board 단계)의 입력 계약.
 - t_video 상태는 갱신하지 않는다(전처리·STT 선형 파이프라인과 독립인 병렬 브랜치).
 
-### `GET /api/v1/board/analyze/{v_id}` — 판독 상태
+### `GET /board/analyze/{v_id}` — 판독 상태
 
 ```bash
-curl http://127.0.0.1:<APP_PORT>/api/v1/board/analyze/1010
+curl http://127.0.0.1:<APP_PORT>/board/analyze/1010
 # {"v_id": 1010, "txt_rows": 20037, "changed": 328, "last_result": {...}}
 ```
 
