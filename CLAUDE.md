@@ -2,7 +2,7 @@
 
 원본 영상을 scenedetect 로 동적 분할하고 세그먼트별 대표 프레임을 사전추출해 t_segment 에
 사전등록하는 FastAPI 워커. **전광판 판독 도메인**(크롭 시간축 그룹핑 + 표본 다수결 VLM 판독
-→ t_frame_baseball_board_detail.txt·t_frame_baseball.is_changed)도 이 워커가 서빙한다(`/api/v1/board/...`
+→ t_frame_baseball_board_detail.txt·t_frame_baseball.is_changed)도 이 워커가 서빙한다(`/board/...`
 — agent-vision3 read 스테이지에서 이관, 원조는 poc-vision-flow).
 구조·관례는 형제 모듈 `agent-vision` 을 계승한다.
 
@@ -68,7 +68,7 @@
 ```bash
 uv sync && cp .env.example .env      # .env 채우기
 PYTHONPATH=src uv run python src/run.py
-# 헬스: /healthz /readyz · 전처리: POST /api/v1/prep/segment {"v_id":1010,"file_name":"source.mp4","force":true}
-# 보드: POST /api/v1/board/analyze {"v_id":1010,"force":true}
+# 헬스: /healthz /readyz · 전처리: POST /prep/segment {"v_id":1010,"file_name":"source.mp4","force":true}
+# 보드: POST /board/analyze {"v_id":1010,"force":true}
 # 린트: uv run ruff check src · 테스트: uv run pytest tests/
 ```
