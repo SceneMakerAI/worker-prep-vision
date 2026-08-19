@@ -57,7 +57,7 @@ class PrepAccepted(BaseModel):
 class PrepStatus(BaseModel):
     """전처리 상태 — t_video 상태 + 등록된 세그먼트 수(DB=SSOT)."""
     v_id: int
-    status: int
+    status: int | None  # t_video.status_code 는 NULL 허용(파이프라인 진입 전 초기 상태)
     segments: int
     # 최근 성공 prep 의 단계별 소요초 {detect, frames, db, total} — 프로세스 메모리 보관이라
     # 서버 재시작 후에는 None(과거 이력은 로그 참조)
