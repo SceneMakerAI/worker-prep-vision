@@ -19,8 +19,15 @@ def _to_frame_skip(fps: float, detect_fps: float) -> int:
     return max(0, round(fps / detect_fps) - 1) if detect_fps > 0 else 0
 
 
-def _detect_cuts_range(path_str: str, threshold: float, min_sec: float, detect_fps: float,
-                       start: float, end: float, pad: float) -> list[float]:
+def _detect_cuts_range(
+    path_str: str,
+    threshold: float,
+    min_sec: float,
+    detect_fps: float,
+    start: float,
+    end: float,
+    pad: float,
+) -> list[float]:
     """
     Summary:
         [start-pad, end+pad] 구간만 탐지해 (start, end] 안의 컷 시각(초) 목록을 반환한다.
@@ -40,10 +47,15 @@ def _detect_cuts_range(path_str: str, threshold: float, min_sec: float, detect_f
     video.seek(FrameTimecode(lo, fps))
     sm = SceneManager()
     sm.add_detector(
-        ContentDetector(threshold=threshold, min_scene_len=max(1, round(min_sec * fps))))
-    sm.detect_scenes(video, end_time=FrameTimecode(hi, fps),
-                     frame_skip=_to_frame_skip(fps, detect_fps), show_progress=False)
-    cuts = [s.get_seconds() for s, _ in sm.get_scene_list()[1:]]   # 첫 장면 시작=seek 지점 제외
+        ContentDetector(threshold=threshold, min_scene_len=max(1, round(min_sec * fps)))
+    )
+    sm.detect_scenes(
+        video,
+        end_time=FrameTimecode(hi, fps),
+        frame_skip=_to_frame_skip(fps, detect_fps),
+        show_progress=False,
+    )
+    cuts = [s.get_seconds() for s, _ in sm.get_scene_list()[1:]]  # 첫 장면 시작=seek 지점 제외
     return [c for c in cuts if start < c <= end]
 
 
@@ -54,22 +66,22 @@ def _postprocess(
     merged: list[list[float]] = []
     for s, e in scenes:
         if merged and (e - s) < min_sec:
-            merged[-1][1] = e          # 너무 짧으면 직전 세그에 흡수
+            merged[-1][1] = e  # 너무 짧으면 직전 세그에 흡수
         else:
             merged.append([s, e])
     if len(merged) >= 2 and (merged[0][1] - merged[0][0]) < min_sec:
-        merged[1][0] = merged[0][0]    # 첫 세그가 짧으면 다음 세그가 흡수
+        merged[1][0] = merged[0][0]  # 첫 세그가 짧으면 다음 세그가 흡수
         merged.pop(0)
 
     split: list[tuple[float, float]] = []
     for s, e in merged:
         dur = e - s
-        
+
         if dur <= max_sec:
             split.append((s, e))
             continue
-        
-        n = int(dur // max_sec) + (1 if dur % max_sec else 0)   # 균등 분할 개수
+
+        n = int(dur // max_sec) + (1 if dur % max_sec else 0)  # 균등 분할 개수
         step = dur / n
         split.extend((s + step * i, s + step * (i + 1)) for i in range(n))
 
@@ -83,8 +95,12 @@ def _postprocess(
 
 
 def detect_windows(
-    path: Path, threshold: float, min_sec: float, max_sec: float,
-    detect_fps: float = 0, workers: int = 0
+    path: Path,
+    threshold: float,
+    min_sec: float,
+    max_sec: float,
+    detect_fps: float = 0,
+    workers: int = 0,
 ) -> list[tuple[int, float, float]]:
     """
     Summary:
@@ -115,17 +131,33 @@ def detect_windows(
     if n > 1:
         step = total / n
         pad = max(2.0, 2 * min_sec)
-        ctx = mp.get_context("spawn")   # opencv fork 비안전 회피
+        ctx = mp.get_context("spawn")  # opencv fork 비안전 회피
         with ProcessPoolExecutor(max_workers=n, mp_context=ctx) as ex:
-            futs = [ex.submit(_detect_cuts_range, str(path), threshold, min_sec, detect_fps,
-                              i * step, (i + 1) * step, pad) for i in range(n)]
+            futs = [
+                ex.submit(
+                    _detect_cuts_range,
+                    str(path),
+                    threshold,
+                    min_sec,
+                    detect_fps,
+                    i * step,
+                    (i + 1) * step,
+                    pad,
+                )
+                for i in range(n)
+            ]
             cuts = sorted({c for f in futs for c in f.result()})
         pts = [0.0, *cuts, total]
         scenes = list(zip(pts[:-1], pts[1:]))
         windows = _postprocess(scenes, total, min_sec, max_sec)
         log.info(
-            "분할(병렬 %d워커): %s (threshold=%s, detect_fps=%s) → %d세그(총 %.0fs)", 
-            n, path.name, threshold, detect_fps, len(windows), total
+            "분할(병렬 %d워커): %s (threshold=%s, detect_fps=%s) → %d세그(총 %.0fs)",
+            n,
+            path.name,
+            threshold,
+            detect_fps,
+            len(windows),
+            total,
         )
         return windows
 
@@ -139,8 +171,12 @@ def detect_windows(
     scenes = [(s.get_seconds(), e.get_seconds()) for s, e in sm.get_scene_list()]
     windows = _postprocess(scenes or [(0.0, total)], total, min_sec, max_sec)
     log.info(
-        "분할: %s (threshold=%s, skip=%d) → %d세그(총 %.0fs)", 
-        path.name, threshold, frame_skip, len(windows), total
+        "분할: %s (threshold=%s, skip=%d) → %d세그(총 %.0fs)",
+        path.name,
+        threshold,
+        frame_skip,
+        len(windows),
+        total,
     )
 
     return windows

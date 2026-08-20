@@ -11,8 +11,8 @@ from log import get_logger
 log = get_logger(__name__)
 
 # t_segment.status_code (t_code, object=SEGMENT)
-STATUS_INPUT = 2001       # 장면 입력(분석 대기) — prep 이 등록하는 상태
-STATUS_ERROR = -1         # ERROR
+STATUS_INPUT = 2001  # 장면 입력(분석 대기) — prep 이 등록하는 상태
+STATUS_ERROR = -1  # ERROR
 
 
 class SegmentRepo:
@@ -21,8 +21,12 @@ class SegmentRepo:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    async def create_pending(self, v_id: int, windows: list[tuple[int, float, float]],
-                             frame_counts: dict[int, int] | None = None) -> int:
+    async def create_pending(
+        self,
+        v_id: int,
+        windows: list[tuple[int, float, float]],
+        frame_counts: dict[int, int] | None = None,
+    ) -> int:
         """
         Summary:
             세그먼트 윈도우를 t_segment 에 '장면 입력'(2001, 분석 대기) 상태로 사전 등록한다.
@@ -48,8 +52,10 @@ class SegmentRepo:
             "(v_id, seg_id, start_time, end_time, frame_cnt, status_code, status_reason) "
             "VALUES (%s, %s, SEC_TO_TIME(%s), SEC_TO_TIME(%s), %s, %s, %s)"
         )
-        params = [(v_id, seg_id, start, end, counts.get(seg_id), STATUS_INPUT, "PENDING")
-                  for seg_id, start, end in windows]
+        params = [
+            (v_id, seg_id, start, end, counts.get(seg_id), STATUS_INPUT, "PENDING")
+            for seg_id, start, end in windows
+        ]
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.executemany(sql, params)

@@ -41,13 +41,19 @@ def _image_url(path: Path, settings: Settings) -> str:
 
 def _ask_one(kind: str, path: Path, settings: Settings) -> str:
     """크롭 1장 판독 — 실패 시 1회 재시도, 소진하면 ReadFailure. 응답 원문(strip)을 반환."""
-    body = json.dumps({
+    body = json.dumps(
+        {
             "model": settings.vlm_model,
             **_SAMPLING,
             "chat_template_kwargs": {"enable_thinking": False},
             "messages": [
                 {"role": "system", "content": [{"type": "text", "text": PROMPTS[kind]}]},
-                {"role": "user", "content": [{"type": "image_url", "image_url": {"url": _image_url(path, settings)}},]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": _image_url(path, settings)}},
+                    ],
+                },
             ],
         }
     ).encode()
@@ -108,17 +114,17 @@ def resolve_group(
     for a in anchors:
         val(a)
 
-    bounds: list[int] = []                     # 새 구간이 '시작'되는 위치들
+    bounds: list[int] = []  # 새 구간이 '시작'되는 위치들
     stack = list(zip(anchors, anchors[1:]))
     while stack:
         lo, hi = stack.pop()
         if val(lo)[0] == val(hi)[0] or hi - lo <= 0:
             continue
-        
+
         if hi - lo == 1:
             bounds.append(hi)
             continue
-        
+
         mid = (lo + hi) // 2
         stack += [(lo, mid), (mid, hi)]
 
@@ -146,6 +152,7 @@ def read_groups(jobs: list[tuple[str, list[Path]]], settings: Settings) -> list:
         - 완료 순서대로 진행률을 로그로 남긴다. 판독은 수 분 단위라 로그가 없으면
           정상 처리 중인지 전건 실패 중인지 밖에서 구분할 수 없다(실패 누계도 같이 찍는다).
     """
+
     def one(job):
         try:
             return resolve_group(job[0], job[1], settings.board_vote_k, settings)
@@ -154,7 +161,7 @@ def read_groups(jobs: list[tuple[str, list[Path]]], settings: Settings) -> list:
 
     total = len(jobs)
     results: list = [None] * total
-    step = max(1, total // 20)      # 5% 단위 — 그룹이 적으면 매 건
+    step = max(1, total // 20)  # 5% 단위 — 그룹이 적으면 매 건
     done = failed = 0
     t0 = time.monotonic()
 
@@ -170,7 +177,11 @@ def read_groups(jobs: list[tuple[str, list[Path]]], settings: Settings) -> list:
                 elapsed = time.monotonic() - t0
                 log.info(
                     "  판독 진행: %d/%d (%.1f%%) 실패 %d — 경과 %.0fs, 잔여 ~%.0fs",
-                    done, total, done * 100 / total, failed,
-                    elapsed, elapsed / done * (total - done),
+                    done,
+                    total,
+                    done * 100 / total,
+                    failed,
+                    elapsed,
+                    elapsed / done * (total - done),
                 )
     return results

@@ -20,8 +20,8 @@ log = get_logger(__name__)
 router = APIRouter(tags=["prep"])
 
 # 에러 코드 — HTTP 상태가 같아도 클라이언트가 코드로 분기하게 본문에 싣는다.
-ERR_VIDEO_NOT_FOUND = "VIDEO_NOT_FOUND"    # t_video 부재 (404)
-ERR_ALREADY_PREPPED = "ALREADY_PREPPED"    # 이미 세그먼트 존재 — 재-prep 은 force 필요 (409)
+ERR_VIDEO_NOT_FOUND = "VIDEO_NOT_FOUND"  # t_video 부재 (404)
+ERR_ALREADY_PREPPED = "ALREADY_PREPPED"  # 이미 세그먼트 존재 — 재-prep 은 force 필요 (409)
 
 
 def _error(code: str, message: str, **ctx) -> dict:
@@ -31,11 +31,12 @@ def _error(code: str, message: str, **ctx) -> dict:
 
 class PrepRequest(BaseModel):
     """전처리 요청 — v_id·원본 파일명(필수), force·extract_frames·category(옵션)."""
+
     v_id: int
-    file_name: str               # {VOD_ROOT}/{v_id}/ 바로 아래의 원본 파일명 (경로 아님)
+    file_name: str  # {VOD_ROOT}/{v_id}/ 바로 아래의 원본 파일명 (경로 아님)
     force: bool = False
     extract_frames: bool = True  # false 면 분할+t_segment 등록만(프레임 jpg 미추출,
-                                 # frame_cnt=NULL — 구간만 빨리 확보하는 용도)
+    # frame_cnt=NULL — 구간만 빨리 확보하는 용도)
     category: str | None = None  # 추후 영상 종류별 분할 튜닝 프리셋용 — 현재는 접수 로그만 남김
 
     @field_validator("file_name")
@@ -49,6 +50,7 @@ class PrepRequest(BaseModel):
 
 class PrepAccepted(BaseModel):
     """전처리 접수 응답 — 백그라운드로 처리될 작업 개요."""
+
     v_id: int
     accepted: bool
     source: str
@@ -56,6 +58,7 @@ class PrepAccepted(BaseModel):
 
 class PrepStatus(BaseModel):
     """전처리 상태 — t_video 상태 + 등록된 세그먼트 수(DB=SSOT)."""
+
     v_id: int
     status: int | None  # t_video.status_code 는 NULL 허용(파이프라인 진입 전 초기 상태)
     segments: int
@@ -65,7 +68,9 @@ class PrepStatus(BaseModel):
 
 
 @router.post("/prep/segment", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted)
-@router.post("/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted, deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
+@router.post(
+    "/prep", status_code=status.HTTP_202_ACCEPTED, response_model=PrepAccepted, deprecated=True
+)  # 구경로 호환 별칭 — 호출처 전환 후 제거
 async def prep(
     req: PrepRequest,
     background: BackgroundTasks,
@@ -87,44 +92,50 @@ async def prep(
     """
     db = request.app.state.db
     video = await VideoRepo(db).get(req.v_id)
-    
+
     if video is None:
         log.warning("영상 정보 없음: v_id=%s", req.v_id)
-        
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=req.v_id)
+            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=req.v_id),
         )
 
     existing = await SegmentRepo(db).count(req.v_id)
-    
+
     if existing > 0 and not req.force:
         log.warning("이미 전처리됨(force 필요): v_id=%s, 세그 %d", req.v_id, existing)
-        
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_error(
-                ERR_ALREADY_PREPPED, 
-                "이미 전처리된 영상입니다. 다시 하려면 force=true.", 
-                v_id=req.v_id, 
-                segments=existing
-            )
+                ERR_ALREADY_PREPPED,
+                "이미 전처리된 영상입니다. 다시 하려면 force=true.",
+                v_id=req.v_id,
+                segments=existing,
+            ),
         )
 
-    background.add_task(run_prep, db, settings, req.v_id, req.file_name, req.force,
-                        req.extract_frames)
+    background.add_task(
+        run_prep, db, settings, req.v_id, req.file_name, req.force, req.extract_frames
+    )
     log.info(
         "전처리 접수: v_id=%s file=%s (force=%s, frames=%s, category=%s)",
-        req.v_id, req.file_name, req.force, req.extract_frames, req.category
+        req.v_id,
+        req.file_name,
+        req.force,
+        req.extract_frames,
+        req.category,
     )
-    
+
     return PrepAccepted(
         v_id=req.v_id, accepted=True, source=str(settings.source_path(req.v_id, req.file_name))
     )
 
 
-@router.get("/prep/{v_id}", response_model=PrepStatus,
-            deprecated=True)  # 구경로 호환 별칭 — 호출처 전환 후 제거
+@router.get(
+    "/prep/{v_id}", response_model=PrepStatus, deprecated=True
+)  # 구경로 호환 별칭 — 호출처 전환 후 제거
 @router.get("/prep/segment/{v_id}", response_model=PrepStatus)
 # 데코레이터는 함수에 가까운 쪽이 먼저 등록됨 — 구체 경로(/prep/segment/{v_id})가
 # /prep/{v_id} 보다 먼저 매칭돼야 하므로 이 순서를 바꾸지 말 것.
@@ -140,8 +151,11 @@ async def prep_status(v_id: int, request: Request):
     db = request.app.state.db
     video = await VideoRepo(db).get(v_id)
     if video is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=v_id))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=v_id),
+        )
     segments = await SegmentRepo(db).count(v_id)
-    return PrepStatus(v_id=v_id, status=video["status_code"], segments=segments,
-                      timings=get_prep_timings(v_id))
+    return PrepStatus(
+        v_id=v_id, status=video["status_code"], segments=segments, timings=get_prep_timings(v_id)
+    )

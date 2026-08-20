@@ -38,8 +38,11 @@ class FrameRepo:
         Returns:
             list[tuple[int, int]]: (프레임 순번, 영상 내 시각(초)) 목록.
         """
-        sql = (f"SELECT a.idx, a.idx_sec FROM t_frame_baseball a "
-               f"WHERE {_TARGET_COND} ORDER BY a.idx_sec, a.idx")
+        sql = (
+            f"SELECT a.idx, a.idx_sec FROM t_frame_baseball a "
+            f"WHERE {_TARGET_COND} ORDER BY a.idx_sec, a.idx"
+        )
+
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(sql, (v_id,))
@@ -52,7 +55,8 @@ class FrameRepo:
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE t_frame_baseball SET is_changed = 0 WHERE v_id = %s", (v_id,))
+                    "UPDATE t_frame_baseball SET is_changed = 0 WHERE v_id = %s", (v_id,)
+                )
                 n = cur.rowcount
         log.info("is_changed 초기화: v_id=%s, %d행", v_id, n)
         return n
@@ -73,7 +77,8 @@ class FrameRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     f"UPDATE t_frame_baseball SET is_changed = 1 WHERE v_id = %s AND idx IN ({ph})",
-                    (v_id, *idxs))
+                    (v_id, *idxs),
+                )
                 return cur.rowcount
 
     async def count_changed(self, v_id: int) -> int:
@@ -82,6 +87,7 @@ class FrameRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     "SELECT COUNT(*) FROM t_frame_baseball WHERE v_id = %s AND is_changed = 1",
-                    (v_id,))
+                    (v_id,),
+                )
                 row = await cur.fetchone()
         return int(row[0]) if row else 0

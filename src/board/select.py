@@ -10,8 +10,9 @@
 """
 
 
-def sample_by_interval(targets: list[tuple[int, int]],
-                       interval_sec: float) -> list[tuple[int, int]]:
+def sample_by_interval(
+    targets: list[tuple[int, int]], interval_sec: float
+) -> list[tuple[int, int]]:
     """
     Summary:
         대상 (idx, idx_sec) 목록을 interval_sec 초 간격으로 솎아낸다.
@@ -30,6 +31,7 @@ def sample_by_interval(targets: list[tuple[int, int]],
     ordered = sorted(targets, key=lambda t: (t[1], t[0]))
     if interval_sec <= 1:
         return ordered
+
     picked: list[tuple[int, int]] = []
     next_sec: float | None = None
     for idx, sec in ordered:

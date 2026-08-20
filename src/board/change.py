@@ -50,7 +50,7 @@ def detect(series: list[tuple[str, int, str]]) -> tuple[set[int], dict[str, int]
         n = 0
         for idx, txt in sorted(rows):
             key = norm(txt)
-            if key != prev:          # 첫 등장(prev=None)도 변화로 본다
+            if key != prev:  # 첫 등장(prev=None)도 변화로 본다
                 changed.add(idx)
                 prev = key
                 n += 1

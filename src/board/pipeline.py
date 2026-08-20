@@ -36,8 +36,9 @@ def _crop_path(settings: Settings, v_id: int, kind: str, idx: int) -> Path:
     return settings.crops_dir(v_id, kind.lower()) / f"{idx:05d}.jpg"
 
 
-def _group_kinds(settings: Settings, v_id: int, items: list[tuple[int, str]],
-                 sec_by_idx: dict[int, int]) -> tuple[dict[str, list[StateRun]], int]:
+def _group_kinds(
+    settings: Settings, v_id: int, items: list[tuple[int, str]], sec_by_idx: dict[int, int]
+) -> tuple[dict[str, list[StateRun]], int]:
     """kind별 dedup 그룹핑 — (kind → StateRun 목록, 크롭 파일 부재 건수).
 
     CPU 블로킹(cv2×N) — 호출자가 to_thread 로 감싼다.
@@ -46,15 +47,19 @@ def _group_kinds(settings: Settings, v_id: int, items: list[tuple[int, str]],
     missing = 0
     for idx, kind in items:
         p = _crop_path(settings, v_id, kind, idx)
+
         if not p.is_file():
-            missing += 1        # detect=1 인데 크롭 없음 — 해당 항목만 빈 txt 로 남는다
+            missing += 1  # detect=1 인데 크롭 없음 — 해당 항목만 빈 txt 로 남는다
             continue
         by_kind.setdefault(kind, []).append((idx, sec_by_idx[idx], p))
+
     if missing:
         log.warning("크롭 파일 부재: v_id=%s, %d건(항목별 격리 — txt 빈 채 유지)", v_id, missing)
-    return {k: dedup_runs(v, settings.board_mae_th, settings.board_min_cnt,
-                          settings.gap_sec)
-            for k, v in by_kind.items()}, missing
+
+    return {
+        k: dedup_runs(v, settings.board_mae_th, settings.board_min_cnt, settings.gap_sec)
+        for k, v in by_kind.items()
+    }, missing
 
 
 async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) -> dict:
@@ -81,7 +86,7 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
         result = {"v_id": v_id, "error": "NO_TARGETS"}
         _last_results[v_id] = result
         return result
-    
+
     picked = select.sample_by_interval(targets, settings.board_crop_interval)
     items = await details.fetch_kinds(v_id, [i for i, _ in picked])
     if not items:
@@ -92,25 +97,31 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
 
     # 2) kind별 시간축 그룹핑 (cv2 블로킹 → 오프로드)
     sec_by_idx = dict((idx, sec) for idx, sec in picked)
-    runs_by_kind, missing = await asyncio.to_thread(
-        _group_kinds, settings, v_id, items, sec_by_idx)
+    runs_by_kind, missing = await asyncio.to_thread(_group_kinds, settings, v_id, items, sec_by_idx)
     t_dedup = time.monotonic() - t0
 
     # 3) 그룹 확정 판독 — 앵커 k점, 불일치 그룹은 이분탐색으로 내부 경계까지 확정
     t1 = time.monotonic()
     jobs: list[tuple[str, list[Path]]] = []
-    group_idxs: list[list[int]] = []           # jobs[i] 그룹의 구성원 idx (시간순, files 와 정렬)
+    group_idxs: list[list[int]] = []  # jobs[i] 그룹의 구성원 idx (시간순, files 와 정렬)
     job_key: list[tuple[str, int]] = []
+
     for kind, runs in runs_by_kind.items():
         for gid in sorted({r.group_id for r in runs}):
-            members = [(sec, idx, p) for r in runs if r.group_id == gid
-                       for idx, sec, p in r.items]
+            members = [(sec, idx, p) for r in runs if r.group_id == gid for idx, sec, p in r.items]
             members.sort()
             jobs.append((kind, [p for _, _, p in members]))
             group_idxs.append([idx for _, idx, _ in members])
             job_key.append((kind, gid))
-    log.info("판독 시작: v_id=%s — 항목 %d건 → 그룹 %d개 (앵커 %d점+이분탐색)",
-             v_id, len(items), len(jobs), settings.board_vote_k)
+
+    log.info(
+        "판독 시작: v_id=%s — 항목 %d건 → 그룹 %d개 (앵커 %d점+이분탐색)",
+        v_id,
+        len(items),
+        len(jobs),
+        settings.board_vote_k,
+    )
+
     values = await asyncio.to_thread(read_groups, jobs, settings)
     t_read = time.monotonic() - t1
 
@@ -118,18 +129,19 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
     t2 = time.monotonic()
     await details.reset_txt(v_id)
     read_ok = read_failed = refined = txt_rows = 0
+
     for (kind, gid), idxs, val in zip(job_key, group_idxs, values):
         if isinstance(val, ReadFailure):
             read_failed += 1
             log.warning("  판독 실패(격리): v_id=%s %s", v_id, val)
             continue
-        if len(val) > 1:                   # 픽셀 비교가 놓친 경계를 판독값이 잡아낸 그룹
+        if len(val) > 1:  # 픽셀 비교가 놓친 경계를 판독값이 잡아낸 그룹
             refined += 1
             log.info("  그룹 내부 경계 확정: v_id=%s %s g%d → %d구간", v_id, kind, gid, len(val))
         for s, e, txt, parsed in val:
-            if not parsed:                 # 원문 저장 — 조용히 버리면 추적 불가
+            if not parsed:  # 원문 저장 — 조용히 버리면 추적 불가
                 log.warning("  후처리 실패(원문 저장): v_id=%s %s g%d: %r", v_id, kind, gid, txt)
-            txt_rows += await details.update_txt_many(v_id, kind, idxs[s:e + 1], txt)
+            txt_rows += await details.update_txt_many(v_id, kind, idxs[s : e + 1], txt)
         read_ok += 1
 
     # 5) 변화 마킹 — 판독값 시계열에서 달라진 프레임에 is_changed=1
@@ -139,14 +151,41 @@ async def run_analyze(db: Database, settings: Settings, v_id: int, force: bool) 
     marked = await frames.mark_is_changed(v_id, sorted(changed))
     t_db = time.monotonic() - t2
 
-    timings = {"dedup": round(t_dedup, 1), "read": round(t_read, 1),
-               "db": round(t_db, 1), "total": round(time.monotonic() - t0, 1)}
-    result = {"v_id": v_id, "groups": len(jobs), "read_ok": read_ok,
-              "read_failed": read_failed, "refined": refined, "crop_missing": missing,
-              "txt_rows": txt_rows, "changed": marked, "timings": timings}
+    timings = {
+        "dedup": round(t_dedup, 1),
+        "read": round(t_read, 1),
+        "db": round(t_db, 1),
+        "total": round(time.monotonic() - t0, 1),
+    }
+
+    result = {
+        "v_id": v_id,
+        "groups": len(jobs),
+        "read_ok": read_ok,
+        "read_failed": read_failed,
+        "refined": refined,
+        "crop_missing": missing,
+        "txt_rows": txt_rows,
+        "changed": marked,
+        "timings": timings,
+    }
+
     _last_results[v_id] = result
-    log.info("board 완료: v_id=%s — 그룹 %d(실패 %d, 내부경계 확정 %d) → txt %d행 / "
-             "변화 %d프레임 (kind별 %s) (총 %.1fs = 그룹핑 %.1f + 판독 %.1f + 저장·마킹 %.1f)",
-             v_id, len(jobs), read_failed, refined, txt_rows, marked, per_kind,
-             timings["total"], timings["dedup"], timings["read"], timings["db"])
+
+    log.info(
+        "board 완료: v_id=%s — 그룹 %d(실패 %d, 내부경계 확정 %d) → txt %d행 / "
+        "변화 %d프레임 (kind별 %s) (총 %.1fs = 그룹핑 %.1f + 판독 %.1f + 저장·마킹 %.1f)",
+        v_id,
+        len(jobs),
+        read_failed,
+        refined,
+        txt_rows,
+        marked,
+        per_kind,
+        timings["total"],
+        timings["dedup"],
+        timings["read"],
+        timings["db"],
+    )
+
     return result

@@ -28,8 +28,7 @@ def get_prep_timings(v_id: int) -> dict[str, float] | None:
 
 
 async def run_prep(
-    db: Database, settings: Settings, v_id: int, file_name: str, force: bool,
-    extract: bool = True
+    db: Database, settings: Settings, v_id: int, file_name: str, force: bool, extract: bool = True
 ) -> dict:
     """
     Summary:
@@ -49,12 +48,17 @@ async def run_prep(
     """
     segrepo, vrepo = SegmentRepo(db), VideoRepo(db)
     source = settings.source_path(v_id, file_name)
-    
+
     if not source.is_file():
         log.warning("원본 없음: v_id=%s path=%s", v_id, source)
         await vrepo.set_status(v_id, VIDEO_STATUS_FAILED)
-        
-        return {"v_id": v_id, "segments": 0, "status": VIDEO_STATUS_FAILED, "error": "SOURCE_NOT_FOUND"}
+
+        return {
+            "v_id": v_id,
+            "segments": 0,
+            "status": VIDEO_STATUS_FAILED,
+            "error": "SOURCE_NOT_FOUND",
+        }
 
     # 1) 분할(scenedetect, CPU 블로킹 → 오프로드)
     t0 = time.monotonic()
@@ -65,7 +69,7 @@ async def run_prep(
         settings.prep_min_sec,
         settings.prep_max_sec,
         settings.prep_detect_fps,
-        settings.prep_detect_workers
+        settings.prep_detect_workers,
     )
     t_detect = time.monotonic() - t0
 
@@ -93,16 +97,29 @@ async def run_prep(
     # 4) t_video 상태 — 전처리 완료(STT 대기)
     await vrepo.set_status(v_id, VIDEO_STATUS_FFMPEG_DONE)
     timings = {
-        "detect": round(t_detect, 1), "frames": round(t_frames, 1), 
-        "db": round(t_db, 1), "total": round(time.monotonic() - t0, 1)
+        "detect": round(t_detect, 1),
+        "frames": round(t_frames, 1),
+        "db": round(t_db, 1),
+        "total": round(time.monotonic() - t0, 1),
     }
     _last_timings[v_id] = timings
     log.info(
-        "prep 완료: v_id=%s, 세그 %d / 프레임 %d(실패 %d) → status=%d (총 %.1fs = 분할 %.1f + 프레임 %.1f + 등록 %.1f)", 
-        v_id, inserted, fstats["frames"], fstats["failed"], VIDEO_STATUS_FFMPEG_DONE, 
-        timings["total"], timings["detect"], timings["frames"], timings["db"]
+        "prep 완료: v_id=%s, 세그 %d / 프레임 %d(실패 %d) → status=%d (총 %.1fs = 분할 %.1f + 프레임 %.1f + 등록 %.1f)",
+        v_id,
+        inserted,
+        fstats["frames"],
+        fstats["failed"],
+        VIDEO_STATUS_FFMPEG_DONE,
+        timings["total"],
+        timings["detect"],
+        timings["frames"],
+        timings["db"],
     )
     return {
-        "v_id": v_id, "segments": inserted, "frames": fstats["frames"], 
-        "failed": fstats["failed"], "status": VIDEO_STATUS_FFMPEG_DONE, "timings": timings
+        "v_id": v_id,
+        "segments": inserted,
+        "frames": fstats["frames"],
+        "failed": fstats["failed"],
+        "status": VIDEO_STATUS_FFMPEG_DONE,
+        "timings": timings,
     }

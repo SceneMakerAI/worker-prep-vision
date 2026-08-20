@@ -12,14 +12,14 @@ from log import get_logger
 log = get_logger(__name__)
 
 # t_video.status_code (t_code, object=VIDEO)
-VIDEO_STATUS_FAILED = -1            # 처리 실패
-VIDEO_STATUS_FFMPEG_INPUT = 1001    # FFMPEG(전처리) 입력
-VIDEO_STATUS_FFMPEG_DONE = 1002     # FFMPEG(전처리) 완료 — prep(분할+프레임) 성공 시 여기로
+VIDEO_STATUS_FAILED = -1  # 처리 실패
+VIDEO_STATUS_FFMPEG_INPUT = 1001  # FFMPEG(전처리) 입력
+VIDEO_STATUS_FFMPEG_DONE = 1002  # FFMPEG(전처리) 완료 — prep(분할+프레임) 성공 시 여기로
 VIDEO_STATUS_DIALOGUE_INPUT = 1005  # 대사 처리 입력
-VIDEO_STATUS_DIALOGUE_DONE = 1006   # 대사 처리 완료 — 이후 agent-vision 분석 가능
-VIDEO_STATUS_SCENE_INPUT = 1010     # 장면 분석 입력
-VIDEO_STATUS_SCENE_DONE = 1011      # 장면 분석 완료
-VIDEO_STATUS_ALL_DONE = 1000        # 모든 처리 완료
+VIDEO_STATUS_DIALOGUE_DONE = 1006  # 대사 처리 완료 — 이후 agent-vision 분석 가능
+VIDEO_STATUS_SCENE_INPUT = 1010  # 장면 분석 입력
+VIDEO_STATUS_SCENE_DONE = 1011  # 장면 분석 완료
+VIDEO_STATUS_ALL_DONE = 1000  # 모든 처리 완료
 
 
 class VideoRepo:
@@ -40,10 +40,7 @@ class VideoRepo:
         Description:
             - 영상 길이는 t_video 에 없다 — 실제 경계는 scenedetect 가 원본에서 직접 정한다.
         """
-        sql = (
-            "SELECT v_id, cate_id, name, dir, status_code "
-            "FROM t_video WHERE v_id = %s"
-        )
+        sql = "SELECT v_id, cate_id, name, dir, status_code FROM t_video WHERE v_id = %s"
         async with self._db.acquire() as conn:
             async with conn.cursor(cursor=DictCursor) as cur:
                 await cur.execute(sql, (v_id,))

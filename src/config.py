@@ -23,61 +23,63 @@ class Settings(BaseSettings):
     )
 
     # --- 서버 바인딩(API 리슨) ---
-    app_host: str = "127.0.0.1"     # 리슨 호스트(배포: 0.0.0.0 또는 사설 IP)
-    app_port: int                   # 리슨 포트 — 배포별 필수(.env). 소스에 박지 않음
+    app_host: str = "127.0.0.1"  # 리슨 호스트(배포: 0.0.0.0 또는 사설 IP)
+    app_port: int  # 리슨 포트 — 배포별 필수(.env). 소스에 박지 않음
 
     # --- 미디어 경로 ---
     # 이 워커는 원본이 있는 호스트에서 실행되어 원본·프레임을 '로컬 파일'로 다룬다(ssh 아님).
-    vod_root: str                   # 원본·프레임 루트 — 필수. 원본 = {vod_root}/{v_id}/{file_name}
-    frame_root: str = ""            # 프레임 출력 루트(빈값이면 vod_root). agent-vision frame_paths 규칙과 정합
+    vod_root: str  # 원본·프레임 루트 — 필수. 원본 = {vod_root}/{v_id}/{file_name}
+    frame_root: str = (
+        ""  # 프레임 출력 루트(빈값이면 vod_root). agent-vision frame_paths 규칙과 정합
+    )
 
     # --- 장면 분할(scenedetect ContentDetector) — 동적 경계 ---
-    prep_threshold: float = 18.0        # 낮을수록 컷 촘촘
-    prep_min_sec: float = 1.0           # 세그 최소 길이 — 미만이면 이웃과 병합
-    prep_max_sec: float = 30.0          # 세그 최대 길이 — 초과하면 균등분할
-    prep_detect_fps: float = 0          # 분할 검사 밀도(초당 검사 프레임 수). 0=원본 전 프레임.
-                                        # 영상 fps 와 무관한 시간 기준 — 실제 skip 은 원본 fps 에서 환산.
-                                        # 낮출수록 분할 빨라지고 컷 정밀도 하락 — 기본 0(전 프레임) 권장
-    prep_detect_workers: int = 0        # 분할 병렬 프로세스 수(0·1=단일 패스). 시간축 청크 분담 —
-                                        # 이음새는 경계로 승격되지 않음(실제 감지 컷 합집합만 사용)
+    prep_threshold: float = 18.0  # 낮을수록 컷 촘촘
+    prep_min_sec: float = 1.0  # 세그 최소 길이 — 미만이면 이웃과 병합
+    prep_max_sec: float = 30.0  # 세그 최대 길이 — 초과하면 균등분할
+    prep_detect_fps: float = 0  # 분할 검사 밀도(초당 검사 프레임 수). 0=원본 전 프레임.
+    # 영상 fps 와 무관한 시간 기준 — 실제 skip 은 원본 fps 에서 환산.
+    # 낮출수록 분할 빨라지고 컷 정밀도 하락 — 기본 0(전 프레임) 권장
+    prep_detect_workers: int = 0  # 분할 병렬 프로세스 수(0·1=단일 패스). 시간축 청크 분담 —
+    # 이음새는 경계로 승격되지 않음(실제 감지 컷 합집합만 사용)
 
     # --- 프레임 추출(ffmpeg CPU) ---
     # 세그당 프레임 수 = max(1, round(길이 × prep_fps)) — 최소 1장 보장(짧은 세그도 대표 1장).
-    prep_fps: float = 0.2               # 초당 프레임(0.2 = 5초당 1장)
-    prep_scale: str = "none"            # 'none'=원본(native), 예 '1024:768'(추후 축소 옵션)
-    prep_jpg_quality: int = 2           # ffmpeg -q:v (1~31, 낮을수록 고화질)
-    prep_concurrency: int = 4           # 프레임 추출 ffmpeg 동시 실행 수(CPU)
+    prep_fps: float = 0.2  # 초당 프레임(0.2 = 5초당 1장)
+    prep_scale: str = "none"  # 'none'=원본(native), 예 '1024:768'(추후 축소 옵션)
+    prep_jpg_quality: int = 2  # ffmpeg -q:v (1~31, 낮을수록 고화질)
+    prep_concurrency: int = 4  # 프레임 추출 ffmpeg 동시 실행 수(CPU)
 
     # --- 전광판 판독: 입력(크롭)·시간축 그룹핑 ---
     # 크롭은 상류(worker-img_models)가 떨궈준다 — 이 워커는 읽기만 한다.
     # 입력 계약: {vod_root}/{v_id}/img_models/{kind 소문자}/{idx:05d}.jpg
     # 판독할 kind 는 설정이 아니라 DB(t_frame_baseball_board_detail 의 detect=1 행)가 정한다.
-    board_crop_interval: float = 2.0    # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
-    board_mae_th: float = 8.0           # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
-    board_min_cnt: int = 2              # 이 장수 미만 그룹 제거(전환 애니메이션·오탐 필터)
-    board_gap_factor: float = 2.0       # 크롭 공백 > interval×factor 면 구간 분리
-                                        # (보드 부재 구간을 상태 유지로 오인하지 않기 위함)
+    board_crop_interval: float = 2.0  # 앞단 크롭 샘플링 간격(초) — 갭 판정 기준의 근거
+    board_mae_th: float = 8.0  # 연속 크롭 픽셀 MAE 가 이 값 초과 → 새 상태 그룹
+    board_min_cnt: int = 2  # 이 장수 미만 그룹 제거(전환 애니메이션·오탐 필터)
+    board_gap_factor: float = 2.0  # 크롭 공백 > interval×factor 면 구간 분리
+    # (보드 부재 구간을 상태 유지로 오인하지 않기 위함)
 
     # --- 보드 분석: VLM 판독 (OpenAI 호환 chat/completions) ---
-    vlm_url: str                        # 베이스 URL — 필수(.env). 예: http://<vlm-host>:<port>
-    vlm_model: str                      # 모델 id — 필수(.env)
-    vlm_timeout: float = 90.0           # 호출 타임아웃(초)
+    vlm_url: str  # 베이스 URL — 필수(.env). 예: http://<vlm-host>:<port>
+    vlm_model: str  # 모델 id — 필수(.env)
+    vlm_timeout: float = 90.0  # 호출 타임아웃(초)
     vlm_max_tokens: int = 120
-    vlm_local_file: bool = False        # true 면 이미지를 file:// 경로로 넘겨 vLLM 이 직접
-                                        # 읽는다(base64 인코딩·전송 제거). vLLM 이 같은 호스트에
-                                        # 있고 서버가 --allowed-local-media-path 로 크롭 루트를
-                                        # 허용해야 성립 — 아니면 전 그룹 판독 실패한다
-    board_read_concurrency: int = 8     # VLM 동시 호출 수
-    board_vote_k: int = 3               # 그룹당 판독 표본 수(3=시작/중간/끝 다수결 — 이관 핵심, 1=중간 1장)
+    vlm_local_file: bool = False  # true 면 이미지를 file:// 경로로 넘겨 vLLM 이 직접
+    # 읽는다(base64 인코딩·전송 제거). vLLM 이 같은 호스트에
+    # 있고 서버가 --allowed-local-media-path 로 크롭 루트를
+    # 허용해야 성립 — 아니면 전 그룹 판독 실패한다
+    board_read_concurrency: int = 8  # VLM 동시 호출 수
+    board_vote_k: int = 3  # 그룹당 판독 표본 수(3=시작/중간/끝 다수결 — 이관 핵심, 1=중간 1장)
 
     # --- DB (MariaDB) ---
     db_ip: str = "127.0.0.1"
     db_port: int = 3306
-    db_user: str                        # 실계정명 — 소스에 박지 않음(.env 필수)
+    db_user: str  # 실계정명 — 소스에 박지 않음(.env 필수)
     db_pw: str = ""
     db_name: str = "scenemaker"
     db_pool_max: int = 8
-    db_pool_recycle: int = 3600         # 유휴 커넥션 재활용(초). NAT 경유 dev 는 짧게(예: 240)
+    db_pool_recycle: int = 3600  # 유휴 커넥션 재활용(초). NAT 경유 dev 는 짧게(예: 240)
 
     # --- 로깅 ---
     log_level: str = "INFO"

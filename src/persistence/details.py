@@ -37,8 +37,10 @@ class BoardDetailRepo:
         if not idxs:
             return []
         ph = ",".join(["%s"] * len(idxs))
-        sql = (f"SELECT idx, kind FROM t_frame_baseball_board_detail "
-               f"WHERE v_id = %s AND detect = 1 AND idx IN ({ph}) ORDER BY idx, kind")
+        sql = (
+            f"SELECT idx, kind FROM t_frame_baseball_board_detail "
+            f"WHERE v_id = %s AND detect = 1 AND idx IN ({ph}) ORDER BY idx, kind"
+        )
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(sql, (v_id, *idxs))
@@ -61,7 +63,8 @@ class BoardDetailRepo:
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE t_frame_baseball_board_detail SET txt = '' WHERE v_id = %s", (v_id,))
+                    "UPDATE t_frame_baseball_board_detail SET txt = '' WHERE v_id = %s", (v_id,)
+                )
                 n = cur.rowcount
         log.info("txt 초기화: v_id=%s, %d행", v_id, n)
         return n
@@ -82,8 +85,10 @@ class BoardDetailRepo:
         if not idxs:
             return 0
         ph = ",".join(["%s"] * len(idxs))
-        sql = (f"UPDATE t_frame_baseball_board_detail SET txt = %s "
-               f"WHERE v_id = %s AND kind = %s AND idx IN ({ph})")
+        sql = (
+            f"UPDATE t_frame_baseball_board_detail SET txt = %s "
+            f"WHERE v_id = %s AND kind = %s AND idx IN ({ph})"
+        )
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(sql, (txt, v_id, kind, *idxs))
@@ -101,9 +106,11 @@ class BoardDetailRepo:
             list[tuple[str, int, str]]: txt 가 빈 행은 제외(가짜 변화 방지).
         """
         ph = ",".join(["%s"] * len(exclude))
-        sql = (f"SELECT kind, idx, txt FROM t_frame_baseball_board_detail "
-               f"WHERE v_id = %s AND txt <> '' AND kind NOT IN ({ph}) "
-               f"ORDER BY kind, idx")
+        sql = (
+            f"SELECT kind, idx, txt FROM t_frame_baseball_board_detail "
+            f"WHERE v_id = %s AND txt <> '' AND kind NOT IN ({ph}) "
+            f"ORDER BY kind, idx"
+        )
         async with self._db.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(sql, (v_id, *exclude))
@@ -115,6 +122,7 @@ class BoardDetailRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     "SELECT COUNT(*) FROM t_frame_baseball_board_detail WHERE v_id = %s AND txt <> ''",
-                    (v_id,))
+                    (v_id,),
+                )
                 row = await cur.fetchone()
         return int(row[0]) if row else 0

@@ -19,8 +19,8 @@ log = get_logger(__name__)
 router = APIRouter(tags=["board"])
 
 # 에러 코드 — HTTP 상태가 같아도 클라이언트가 코드로 분기하게 본문에 싣는다.
-ERR_VIDEO_NOT_FOUND = "VIDEO_NOT_FOUND"      # t_video 부재 (404)
-ERR_ALREADY_ANALYZED = "ALREADY_ANALYZED"    # 이미 판독값 존재 — 재실행은 force 필요 (409)
+ERR_VIDEO_NOT_FOUND = "VIDEO_NOT_FOUND"  # t_video 부재 (404)
+ERR_ALREADY_ANALYZED = "ALREADY_ANALYZED"  # 이미 판독값 존재 — 재실행은 force 필요 (409)
 
 
 def _error(code: str, message: str, **ctx) -> dict:
@@ -30,18 +30,21 @@ def _error(code: str, message: str, **ctx) -> dict:
 
 class AnalyzeRequest(BaseModel):
     """판독 요청 — v_id(필수)·force(옵션). 입력은 앞단이 떨궈둔 크롭·검출행이라 파일명 불필요."""
+
     v_id: int
     force: bool = False
 
 
 class AnalyzeAccepted(BaseModel):
     """판독 접수 응답."""
+
     v_id: int
     accepted: bool
 
 
 class AnalyzeStatus(BaseModel):
     """판독 상태 — txt 채워진 행 수·변화 프레임 수(DB=SSOT) + 최근 실행 요약."""
+
     v_id: int
     txt_rows: int
     changed: int
@@ -84,9 +87,10 @@ async def analyze(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_error(
-                ERR_ALREADY_ANALYZED, 
-                "이미 판독된 영상입니다. 다시 하려면 force=true.", 
-                v_id=req.v_id, txt_rows=existing
+                ERR_ALREADY_ANALYZED,
+                "이미 판독된 영상입니다. 다시 하려면 force=true.",
+                v_id=req.v_id,
+                txt_rows=existing,
             ),
         )
 
@@ -108,9 +112,13 @@ async def analyze_status(v_id: int, request: Request):
     db = request.app.state.db
     video = await VideoRepo(db).get(v_id)
     if video is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=v_id))
-    return AnalyzeStatus(v_id=v_id,
-                         txt_rows=await BoardDetailRepo(db).count_txt(v_id),
-                         changed=await FrameRepo(db).count_changed(v_id),
-                         last_result=get_board_result(v_id))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error(ERR_VIDEO_NOT_FOUND, "영상이 없습니다.", v_id=v_id),
+        )
+    return AnalyzeStatus(
+        v_id=v_id,
+        txt_rows=await BoardDetailRepo(db).count_txt(v_id),
+        changed=await FrameRepo(db).count_changed(v_id),
+        last_result=get_board_result(v_id),
+    )

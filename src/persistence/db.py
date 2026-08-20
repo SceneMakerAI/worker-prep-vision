@@ -61,7 +61,7 @@ class Database:
             pool_recycle=settings.db_pool_recycle,
         )
         log.info(f"DB 풀 생성: {settings.db_name} (max={settings.db_pool_max})")
-        
+
         return cls(pool)
 
     def acquire(self):

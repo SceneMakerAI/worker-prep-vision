@@ -36,7 +36,10 @@ async def lifespan(app: FastAPI):
     db_ready = await app.state.db.ping()
     log.info(
         "DB 접속 테스트: %s | vod_root=%s frames_root=%s fps=%s",
-        db_ready, settings.vod_root, settings.frames_root, settings.prep_fps
+        db_ready,
+        settings.vod_root,
+        settings.frames_root,
+        settings.prep_fps,
     )
     log.info("WORKER PREP VISION 준비 완료.")
 
@@ -54,7 +57,7 @@ app = FastAPI(title="Worker Prep Vision", version="0.1.6", lifespan=lifespan)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """미처리 예외를 일관된 JSON 500 으로 변환(스택트레이스는 로그만, 응답 미노출)."""
     log.exception("처리되지 않은 오류: %s %s", request.method, request.url.path)
-    
+
     return JSONResponse(
         status_code=500,
         content={"detail": {"code": "INTERNAL_ERROR", "message": "서버 내부 오류가 발생했습니다."}},

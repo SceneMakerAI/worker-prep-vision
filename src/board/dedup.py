@@ -27,8 +27,9 @@ class StateRun:
     group_id 는 상태 그룹 번호 — 크롭 공백(gap)으로 갈라진 구간들은 내용이 같으므로
     같은 group_id 를 공유하고, VLM 판독도 그룹당 1회(표본 다수결)만 한다.
     """
+
     group_id: int
-    items: list[tuple[int, int, Path]] = field(default_factory=list)   # (idx, sec, 경로) 시간순
+    items: list[tuple[int, int, Path]] = field(default_factory=list)  # (idx, sec, 경로) 시간순
 
     @property
     def idxs(self) -> list[int]:
@@ -65,14 +66,19 @@ def _diff(a: np.ndarray, b: np.ndarray) -> float:
     """
     if a.shape != b.shape:
         return float("inf")
+
     d = np.abs(a - b)
     h, w = d.shape
-    return max(float(d[y:y + _TILE_H, x:x + _TILE_W].mean())
-               for y in range(0, h, _TILE_H) for x in range(0, w, _TILE_W))
+    return max(
+        float(d[y : y + _TILE_H, x : x + _TILE_W].mean())
+        for y in range(0, h, _TILE_H)
+        for x in range(0, w, _TILE_W)
+    )
 
 
-def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,
-               gap_sec: float) -> list[StateRun]:
+def dedup_runs(
+    items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int, gap_sec: float
+) -> list[StateRun]:
     """
     Summary:
         한 kind 의 (idx, sec, 크롭경로) 목록을 시간축으로 그룹핑해 상태 구간 목록을 만든다.
@@ -90,26 +96,29 @@ def dedup_runs(items: list[tuple[int, int, Path]], mae_th: float, min_cnt: int,
     """
     groups: list[list[tuple[int, int, Path]]] = []
     ref: np.ndarray | None = None
+
     for idx, sec, p in sorted(items, key=lambda t: t[1]):
         img = _feature(p)
+
         if img is None:
             log.warning("크롭 읽기 실패(무시): %s", p)
             continue
+
         if ref is None or _diff(img, ref) > mae_th:
             groups.append([(idx, sec, p)])
-            ref = img          # 기준 = 그룹 첫 이미지(갱신 안 함 — 드리프트 방지)
+            ref = img  # 기준 = 그룹 첫 이미지(갱신 안 함 — 드리프트 방지)
         else:
             groups[-1].append((idx, sec, p))
 
     runs: list[StateRun] = []
     for gid, group in enumerate(g for g in groups if len(g) >= min_cnt):
         run = StateRun(group_id=gid, items=[group[0]])
+
         for prev, cur in zip(group, group[1:]):
             if cur[1] - prev[1] > gap_sec:
                 runs.append(run)
                 run = StateRun(group_id=gid, items=[])
             run.items.append(cur)
         runs.append(run)
+
     return runs
-
-

@@ -3,6 +3,7 @@
 systemd·로컬 모두 `uv run python src/run.py` 로 기동한다. 바인딩(호스트·포트)을 CLI 인자가
 아니라 .env 에서 읽는다 — 설정을 한 곳(config.Settings)에 모으고 포트번호를 소스에 노출하지 않는다.
 """
+
 # 서드파티
 import uvicorn
 

@@ -12,7 +12,7 @@
 
 import re
 
-BASE_EMPTY = "없음"          # 주자 없음의 저장 표기
+BASE_EMPTY = "없음"  # 주자 없음의 저장 표기
 _BASE_LABELS = (("first|1st", "1루"), ("second|2nd", "2루"), ("third|3rd", "3루"))
 
 
@@ -44,7 +44,7 @@ def parse_base(raw: str) -> str | None:
     for pat, name in _BASE_LABELS:
         m = re.search(rf"(?:{pat})\s*(?:\([^)]*\))?\s*[:：]\s*(on|off)\b", t, re.IGNORECASE)
         if not m:
-            return None                      # 셋 중 하나라도 못 읽으면 실패
+            return None  # 셋 중 하나라도 못 읽으면 실패
         if m.group(1).lower() == "on":
             on.append(name)
     return ", ".join(on) if on else BASE_EMPTY

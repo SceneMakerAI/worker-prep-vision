@@ -34,16 +34,37 @@ def _extract_one(source: Path, ts: float, out: Path, scale: str, quality: int) -
     vf = [] if scale == "none" else ["-vf", f"scale={scale}"]
     # -threads 1: 1장 디코딩은 멀티스레드 이득이 없고, 이미 프로세스 단위로 수십 개가 동시에
     # 돌아 스레드 과잉(코어수×동시성)으로 컨텍스트 스위칭 낭비만 생긴다.
-    cmd = ["ffmpeg", "-nostdin", "-y", "-threads", "1", "-ss", f"{ts:.3f}", "-i", str(source),
-           "-frames:v", "1", *vf, "-q:v", str(quality), str(out)]
+    cmd = [
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-threads",
+        "1",
+        "-ss",
+        f"{ts:.3f}",
+        "-i",
+        str(source),
+        "-frames:v",
+        "1",
+        *vf,
+        "-q:v",
+        str(quality),
+        str(out),
+    ]
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0:
-        log.warning("프레임 추출 실패 ts=%.2f → %s: %s", ts, out.name, r.stderr[-200:].decode(errors="replace"))
+        log.warning(
+            "프레임 추출 실패 ts=%.2f → %s: %s",
+            ts,
+            out.name,
+            r.stderr[-200:].decode(errors="replace"),
+        )
     return r.returncode == 0 and out.is_file()
 
 
-def extract_frames(source: Path, windows: list[tuple[int, float, float]], settings: Settings,
-                   v_id: int) -> dict:
+def extract_frames(
+    source: Path, windows: list[tuple[int, float, float]], settings: Settings, v_id: int
+) -> dict:
     """
     Summary:
         세그먼트 목록 각각에 대해 대표 프레임 jpg 를 추출해 세그 디렉토리에 저장한다.
@@ -65,7 +86,7 @@ def extract_frames(source: Path, windows: list[tuple[int, float, float]], settin
     for seg_id, start, end in windows:
         d = settings.seg_frame_dir(v_id, seg_id)
         if d.exists():
-            shutil.rmtree(d)          # 재실행 안전 — 세그 프레임 새로
+            shutil.rmtree(d)  # 재실행 안전 — 세그 프레임 새로
         d.mkdir(parents=True, exist_ok=True)
         n = frame_count(end - start, settings.prep_fps)
         for i, ts in enumerate(_timestamps(start, end, n)):
@@ -74,13 +95,22 @@ def extract_frames(source: Path, windows: list[tuple[int, float, float]], settin
     per_seg = dict.fromkeys((seg_id for seg_id, _, _ in windows), 0)
     with ThreadPoolExecutor(max_workers=settings.prep_concurrency) as ex:
         results = ex.map(
-            lambda job: _extract_one(source, job[1], job[2], settings.prep_scale, settings.prep_jpg_quality),
-            jobs)
+            lambda job: _extract_one(
+                source, job[1], job[2], settings.prep_scale, settings.prep_jpg_quality
+            ),
+            jobs,
+        )
         for (seg_id, _, _), r in zip(jobs, results):
             if r:
                 per_seg[seg_id] += 1
 
     ok = sum(per_seg.values())
     stats = {"segments": len(windows), "frames": ok, "failed": len(jobs) - ok, "per_seg": per_seg}
-    log.info("프레임 추출: v_id=%s, %d세그 → %d장(실패 %d)", v_id, stats["segments"], stats["frames"], stats["failed"])
+    log.info(
+        "프레임 추출: v_id=%s, %d세그 → %d장(실패 %d)",
+        v_id,
+        stats["segments"],
+        stats["frames"],
+        stats["failed"],
+    )
     return stats
