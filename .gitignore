@@ -35,3 +35,4 @@ dist/
 # ── 로컬 산출물 ──
 logs/
 /data/
+tmp/
