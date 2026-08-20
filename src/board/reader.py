@@ -8,7 +8,8 @@
 import base64
 import json
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from board import postprocess
@@ -27,20 +28,29 @@ class ReadFailure(Exception):
     """표본 판독 실패(재시도 소진) — 호출자가 건별 격리한다(해당 그룹 txt 만 비어 남음)."""
 
 
+def _image_url(path: Path, settings: Settings) -> str:
+    """이미지 참조 — 로컬 모드면 file:// URI, 아니면 base64 data URI.
+
+    vLLM 이 같은 호스트면 파일을 직접 읽게 해 read+base64+JSON 직렬화를 통째로 없앤다.
+    as_uri() 를 쓰는 건 공백·비ASCII 경로의 퍼센트 인코딩을 표준에 맡기기 위해서다.
+    """
+    if settings.vlm_local_file:
+        return path.resolve().as_uri()
+    return "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()
+
+
 def _ask_one(kind: str, path: Path, settings: Settings) -> str:
     """크롭 1장 판독 — 실패 시 1회 재시도, 소진하면 ReadFailure. 응답 원문(strip)을 반환."""
-    b64 = base64.b64encode(path.read_bytes()).decode()
     body = json.dumps({
-        "model": settings.vlm_model,
-        **_SAMPLING,
-        "chat_template_kwargs": {"enable_thinking": False},
-        "messages": [
-            {"role": "system", "content": [{"type": "text", "text": PROMPTS[kind]}]},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b64}},
-            ]},
-        ],
-    }).encode()
+            "model": settings.vlm_model,
+            **_SAMPLING,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "messages": [
+                {"role": "system", "content": [{"type": "text", "text": PROMPTS[kind]}]},
+                {"role": "user", "content": [{"type": "image_url", "image_url": {"url": _image_url(path, settings)}},]},
+            ],
+        }
+    ).encode()
     url = settings.vlm_url.rstrip("/") + "/v1/chat/completions"
     err = "unknown"
     for _ in range(2):
@@ -59,8 +69,9 @@ def read_one(kind: str, path: Path, settings: Settings) -> tuple[str, bool]:
     return postprocess.apply(kind, _ask_one(kind, path, settings))
 
 
-def resolve_group(kind: str, files: list[Path], k: int, settings: Settings,
-                  _read=read_one) -> list[tuple[int, int, str, bool]]:
+def resolve_group(
+    kind: str, files: list[Path], k: int, settings: Settings, _read=read_one
+) -> list[tuple[int, int, str, bool]]:
     """
     Summary:
         그룹을 앵커 k점 판독으로 검증하고, 값이 갈리면 이분탐색으로 내부 경계를 찾아
@@ -103,9 +114,11 @@ def resolve_group(kind: str, files: list[Path], k: int, settings: Settings,
         lo, hi = stack.pop()
         if val(lo)[0] == val(hi)[0] or hi - lo <= 0:
             continue
+        
         if hi - lo == 1:
             bounds.append(hi)
             continue
+        
         mid = (lo + hi) // 2
         stack += [(lo, mid), (mid, hi)]
 
@@ -130,6 +143,8 @@ def read_groups(jobs: list[tuple[str, list[Path]]], settings: Settings) -> list:
     Description:
         - 블로킹(HTTP×N) — 호출자가 asyncio.to_thread 로 감싼다.
         - 실패는 예외 대신 값으로 돌려준다 — 한 그룹 실패가 배치를 못 죽이게(건별 격리).
+        - 완료 순서대로 진행률을 로그로 남긴다. 판독은 수 분 단위라 로그가 없으면
+          정상 처리 중인지 전건 실패 중인지 밖에서 구분할 수 없다(실패 누계도 같이 찍는다).
     """
     def one(job):
         try:
@@ -137,5 +152,25 @@ def read_groups(jobs: list[tuple[str, list[Path]]], settings: Settings) -> list:
         except ReadFailure as e:
             return e
 
+    total = len(jobs)
+    results: list = [None] * total
+    step = max(1, total // 20)      # 5% 단위 — 그룹이 적으면 매 건
+    done = failed = 0
+    t0 = time.monotonic()
+
     with ThreadPoolExecutor(max_workers=settings.board_read_concurrency) as ex:
-        return list(ex.map(one, jobs))
+        futures = {ex.submit(one, job): i for i, job in enumerate(jobs)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            results[i] = fut.result()
+            done += 1
+            if isinstance(results[i], ReadFailure):
+                failed += 1
+            if done % step == 0 or done == total:
+                elapsed = time.monotonic() - t0
+                log.info(
+                    "  판독 진행: %d/%d (%.1f%%) 실패 %d — 경과 %.0fs, 잔여 ~%.0fs",
+                    done, total, done * 100 / total, failed,
+                    elapsed, elapsed / done * (total - done),
+                )
+    return results

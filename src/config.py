@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     vlm_model: str                      # 모델 id — 필수(.env)
     vlm_timeout: float = 90.0           # 호출 타임아웃(초)
     vlm_max_tokens: int = 120
+    vlm_local_file: bool = False        # true 면 이미지를 file:// 경로로 넘겨 vLLM 이 직접
+                                        # 읽는다(base64 인코딩·전송 제거). vLLM 이 같은 호스트에
+                                        # 있고 서버가 --allowed-local-media-path 로 크롭 루트를
+                                        # 허용해야 성립 — 아니면 전 그룹 판독 실패한다
     board_read_concurrency: int = 8     # VLM 동시 호출 수
     board_vote_k: int = 3               # 그룹당 판독 표본 수(3=시작/중간/끝 다수결 — 이관 핵심, 1=중간 1장)
 
